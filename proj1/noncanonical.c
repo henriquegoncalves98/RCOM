@@ -18,6 +18,9 @@ volatile int STOP=FALSE;
 
 struct termios oldtio,newtio;
 
+void llopen(int fd);
+void llclose(int fd);
+
 int main(int argc, char** argv)
 {
   int fd, c, res;
@@ -53,16 +56,16 @@ int main(int argc, char** argv)
 
 
 
-    
-  
-  while (STOP==FALSE) {       /* loop for input */    
-    res = read(fd,buf,255);   /* returns after 5 chars have been input */
-    //buf[res]=0;               /* so we can printf... */
-    printf(":%s:%d\n", buf, res);
-    if (buf[0]== '0x7e') STOP=TRUE;
-  }
+  char UAarray[5];
+	UAarray[0] = 0x7E;
+	UAarray[1] = 0x03;
+	UAarray[2] = 0x07;
+	UAarray[3] = UAarray[1]^UAarray[2];
+	UAarray[4] = UAarray[0];
 
-    //write(fd,buf,strlen(buf));
+	size_t UAarraySize = sizeof(UAarray)/sizeof(UAarray[0]);
+	
+	write(fd, UAarray, UAarraySize);
 
 
 
@@ -105,6 +108,19 @@ void llopen(int fd) {
   }
 
   printf("New termios structure set\n");
+
+
+  int res, j;
+  char buf[255];
+  
+  while (STOP==FALSE) {           /* loop for input */    
+    res = read(fd, buf, 255);     /* returns after 5 chars have been input */
+    for(j=0; j<res; j++)
+        printf("%X ", buf[j]);
+    printf("\n");
+    if (buf[res-1] == 0x7e) 
+      STOP=TRUE;
+  }
 }
 
 
