@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 
 #define BAUDRATE B38400
 #define MODEMDEVICE "/dev/ttyS1"
@@ -18,12 +19,26 @@
 volatile int STOP=FALSE;
 
 struct termios oldtio,newtio;
+int timeout = 3;
+int retries = 0;
+int resend = 0;
+int received = 0;
+
+void llopen(int fd);
+void llclose(int fd);
+
+static void alarmHandler()
+{
+  printf("Nothing received");
+  retries++;
+  resend = 1;
+  received = 0;
+}
 
 
 int main(int argc, char** argv)
 {
-  int fd, c, res;
-  char buf[255];
+  int fd, res;
   int i, sum = 0, speed = 0;
   
   if ( (argc < 2) || 
@@ -38,50 +53,14 @@ int main(int argc, char** argv)
     perror(argv[1]); exit(-1); 
   }
 
+  signal(SIGALRM, alarmHandler);
 
 	llopen(fd);
 
 
+	
 
   
-
-	char test[255];
-	test[0] = 0x7E;
-	test[1] = 0x03;
-	test[2] = 0x03;
-	test[3] = test[1]^test[2];
-	test[4] = test[0];
-
-	
-
-	int j;
-	for(j=0;j<5;j++)
-		printf("[%x] ",test[j]);
-	printf("\n");
-	
-	res = write(fd,test,strlen(test)); 
-
-	/*
-	printf("Introduza uma string :");
-	fgets(buf,254,stdin);
-
-	printf("%s", buf);  
-    
-    res = write(fd,buf,strlen(buf)+1);   
-    printf("%d bytes written\n", res);
- */
-
-  /* 
-    O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar 
-    o indicado no gui�o 
-  */
-/*
-	while (STOP == FALSE) {
-		res = read(fd, buf, 255);
-		printf(":%s:%d\n", buf, res);
-		if (buf[res-1]=='\0') STOP=TRUE;
-	}
-	*/
 
 
   llclose(fd);
@@ -108,7 +87,7 @@ void llopen(int fd)
   newtio.c_lflag = 0;
 
   newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-  newtio.c_cc[VMIN]     = 1;   /* blocking read until 1 char received */
+  newtio.c_cc[VMIN]     = 5;   /* blocking read until 1 char received */
 /* 
   VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a 
   leitura do(s) pr�ximo(s) caracter(es)
@@ -124,6 +103,46 @@ void llopen(int fd)
   }
 
   printf("New termios structure set\n");
+
+  int res;
+  char SETarray[5];
+	SETarray[0] = 0x7E;
+	SETarray[1] = 0x03;
+	SETarray[2] = 0x03;
+	SETarray[3] = SETarray[1]^SETarray[2];
+	SETarray[4] = SETarray[0];
+
+	size_t SETarraySize = sizeof(SETarray)/sizeof(SETarray[0]);
+	
+	write(fd, SETarray, SETarraySize); 
+
+  alarm(timeout);
+
+  char buf[255];
+
+  while( !received && (retries != 3) ) {
+
+    if( resend ) { 
+      write(fd, SETarray, SETarraySize);
+      alarm(timeout);
+    }
+
+    else {
+      res = read(fd, buf, 255);
+
+      if(buf[res-1] == 0x7e) {
+        received = 1;
+        retries = 0;
+        resend = 0;
+      }
+    }
+  }
+
+  if(retries == 3) {
+    printf("didnt work");
+  }
+
+
 }
 
 
