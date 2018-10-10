@@ -98,7 +98,7 @@ void llopen(int fd) {
   newtio.c_lflag = 0;
 
   newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-  newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
+  newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
 
   tcflush(fd, TCIOFLUSH);
 
