@@ -10,12 +10,14 @@
 #define FLAG 				0x7E
 #define A 					0x03
 #define SET_C 				0x03
+#define UA_C 				0x07
 #define SET_BCC1 			A^SET_C
+#define UA_BCC1 			A^UA_C
 
 
 volatile int STOP=FALSE;
 
-struct termios oldtio,newtio;
+struct termios oldtio, newtio;
 int timeout = 3;
 int retries = 0;
 int resend = 0;
@@ -49,9 +51,12 @@ int fd;
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
 
-	//signal(SIGALRM, alarmHandler);
+	signal(SIGALRM, alarmHandler);
 
-	llopen(fd);
+	if( llopen(fd) == 0 ) {
+		printf("Failed to make a connection to the receiver \n");
+		return -1;
+	}
 
 	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
 
@@ -61,7 +66,7 @@ int fd;
 
 
 
-void llopen(int fd)
+int llopen(int fd)
 {
 
 	if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
@@ -77,7 +82,7 @@ void llopen(int fd)
 	/* set input mode (non-canonical, no echo,...) */
 	newtio.c_lflag = 0;
 
-	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
+	newtio.c_cc[VTIME]    = 1;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 1 char received */
 
 
@@ -90,37 +95,41 @@ void llopen(int fd)
 
 	printf("New termios structure set\n");
 
+
+
 	sendSET(fd);
 
-	
-	
-	/*
 	alarm(timeout);
 
 	char buf[255];
 
+	enum state_machine state = START;
+	unsigned char c;
+
 	while( !received && (retries != 3) ) {
 
 		if( resend ) { 
-			write(fd, SETarray, SETarraySize);
+			sendSET(fd);
 			alarm(timeout);
+			resend = 0;
+			state = START;
 		}
 
 		else {
-			res = read(fd, buf, 255);
+			read(fd, &c, 1);
+			caughtUA(&state, &c);
 
-			if(buf[res-1] == 0x7e) {
+			if(state == DONE)
 				received = 1;
-				retries = 0;
-				resend = 0;
-			}
 		}
 	}
 
 	if(retries == 3) {
 		printf("didnt work");
+		return 0;
 	}
-	*/
+
+	return 1;
 }
 
 void sendSET(int fd) {
@@ -135,6 +144,60 @@ void sendSET(int fd) {
 	size_t SETarraySize = sizeof(SETarray)/sizeof(SETarray[0]);
 
 	write(fd, SETarray, SETarraySize); 
+}
+
+void caughtUA(enum state_machine *state, unsigned char *c) {
+
+	while(*state != DONE) {
+
+		switch(*state) {
+			case(START):
+				if(*c == FLAG)
+					state = FLAG_RCV;
+				break;
+			
+			case(FLAG_RCV):
+				if(*c == A)
+					*state = A_RCV;
+				else {
+					if(*c == FLAG)
+						break;
+					else
+						*state = START;
+				}
+				break;
+
+			case(A_RCV):
+				if(*c == UA_C)
+					*state = C_RCV;
+				else {
+					if(*c == FLAG)
+						*state = FLAG_RCV;
+					else
+						*state = START;
+				}
+				break;
+			
+			case(C_RCV):
+				if(*c == UA_BCC1)
+					*state = BCC1_RCV;
+				else {
+					if(c == FLAG)
+						*state = FLAG_RCV;
+					else
+						*state = START;
+				}
+				break;
+
+			case(BCC1_RCV):
+				if(*c == FLAG)
+					*state = DONE;
+				else
+					*state = START;	
+
+				break;
+		}
+	}
 }
 
 
