@@ -51,7 +51,7 @@ int fd;
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
 
-	signal(SIGALRM, alarmHandler);
+	//signal(SIGALRM, alarmHandler);
 
 	if( llopen(fd) == 0 ) {
 		printf("Failed to make a connection to the receiver \n");
@@ -153,7 +153,7 @@ void caughtUA(enum state_machine *state, unsigned char *c) {
 		switch(*state) {
 			case(START):
 				if(*c == FLAG)
-					state = FLAG_RCV;
+					*state = FLAG_RCV;
 				break;
 			
 			case(FLAG_RCV):
@@ -182,7 +182,7 @@ void caughtUA(enum state_machine *state, unsigned char *c) {
 				if(*c == UA_BCC1)
 					*state = BCC1_RCV;
 				else {
-					if(c == FLAG)
+					if(*c == FLAG)
 						*state = FLAG_RCV;
 					else
 						*state = START;
