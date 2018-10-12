@@ -88,7 +88,7 @@ int caughtSET(int fd) {
 
 	while(state != DONE) {
 
-		read(fd, c, 1);
+		read(fd, &c, 1);
 
 		switch(state) {
 			case(START):
