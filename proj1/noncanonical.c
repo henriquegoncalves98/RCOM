@@ -1,25 +1,23 @@
 /*Non-Canonical Input Processing*/
+#include "noncanonical.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <termios.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#define BAUDRATE 			B38400
+#define _POSIX_SOURCE 		1 /* POSIX compliant source */
+#define FALSE 				0
+#define TRUE 				1
 
-#define BAUDRATE B38400
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
+#define FLAG 				0x7E
+#define A 					0x03
+#define SET_C 				0x03
+#define UA_C				0x07
+#define SET_BCC1 			A^SET_C
+#define UA_BCC1 			A^UA_C
+			
 
 volatile int STOP=FALSE;
 
 struct termios oldtio,newtio;
 
-void llopen(int fd);
-void llclose(int fd);
 
 int main(int argc, char** argv)
 {
@@ -75,34 +73,89 @@ void llopen(int fd) {
 	printf("New termios structure set\n");
 
 
-	int res, j;
-	char buf[255];
-	/* 
-	O ciclo WHILE deve ser alterado de modo a respeitar o indicado no gui�o 
-	*/
-	while (STOP==FALSE) {           /* loop for input */    
-		res = read(fd, buf, 255);     /* returns after 5 chars have been input */
-		for(j=0; j<res; j++)
-			printf("%X ", buf[j]);
-			printf("\n");
-			if (buf[res-1] == 0x7e) 
-				STOP=TRUE;
+	if( caughtSET(fd) ) {
+		printf("SET frame received");
+		//sendUA(fd);
+		//printf("UA frame sent");
+	}
+}
+
+
+int caughtSET(int fd) {
+
+	char c;
+	enum state_machine state = START;
+
+	while(state != DONE) {
+
+		read(fd, c, 1);
+
+		switch(state) {
+			case(START):
+				if(c == FLAG)
+					state = FLAG_RCV;
+				break;
+			
+			case(FLAG_RCV):
+				if(c == A)
+					state = A_RCV;
+				else {
+					if(c == FLAG)
+						break;
+					else
+						state = START;
+				}
+				break;
+
+			case(A_RCV):
+				if(c == C_RCV)
+					state = C_RCV;
+				else {
+					if(c == FLAG)
+						state = FLAG_RCV;
+					else
+						state = START;
+				}
+				break;
+			
+			case(C_RCV):
+				if(c == SET_BCC1)
+					state=BCC1_RCV;
+				else {
+					if(c == FLAG)
+						state = FLAG_RCV;
+					else
+						state=START;
+				}
+				break;
+
+			case(BCC1_RCV):
+				if(c == FLAG_RCV)
+					state = DONE;
+				else
+					state = START;	
+
+				break;
+		}
 	}
 
-	//STATE MACHINE AQUI
+	return TRUE;
+}
+
+void sendUA(int fd) {
 
 	char UAarray[5];
-	UAarray[0] = 0x7E;
-	UAarray[1] = 0x03;
-	UAarray[2] = 0x07;
-	UAarray[3] = UAarray[1]^UAarray[2];
-	UAarray[4] = UAarray[0];
+	UAarray[0] = FLAG;
+	UAarray[1] = A;
+	UAarray[2] = UA_C;
+	UAarray[3] = UA_BCC1;
+	UAarray[4] = FLAG;
 
 	size_t UAarraySize = sizeof(UAarray)/sizeof(UAarray[0]);
 
 	write(fd, UAarray, UAarraySize);
-}
 
+}
 
 void llclose(int fd) {
 	tcsetattr(fd,TCSANOW,&oldtio);

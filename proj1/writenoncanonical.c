@@ -1,20 +1,17 @@
 /*Non-Canonical Input Processing*/
+#include "writenoncanonical.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <termios.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <signal.h>
+#define BAUDRATE 			B38400
+#define MODEMDEVICE 		"/dev/ttyS1"
+#define _POSIX_SOURCE 		1 /* POSIX compliant source */
+#define FALSE 				0
+#define TRUE 				1
 
-#define BAUDRATE B38400
-#define MODEMDEVICE "/dev/ttyS1"
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
+#define FLAG 				0x7E
+#define A 					0x03
+#define SET_C 				0x03
+#define SET_BCC1 			A^SET_C
+
 
 volatile int STOP=FALSE;
 
@@ -24,8 +21,6 @@ int retries = 0;
 int resend = 0;
 int received = 0;
 
-void llopen(int fd);
-void llclose(int fd);
 
 static void alarmHandler()
 {
@@ -54,7 +49,7 @@ int fd;
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
 
-	signal(SIGALRM, alarmHandler);
+	//signal(SIGALRM, alarmHandler);
 
 	llopen(fd);
 
@@ -95,18 +90,11 @@ void llopen(int fd)
 
 	printf("New termios structure set\n");
 
-	int res;
-	char SETarray[5];
-	SETarray[0] = 0x7E;
-	SETarray[1] = 0x03;
-	SETarray[2] = 0x03;
-	SETarray[3] = SETarray[1]^SETarray[2];
-	SETarray[4] = SETarray[0];
+	sendSET(fd);
 
-	size_t SETarraySize = sizeof(SETarray)/sizeof(SETarray[0]);
-
-	write(fd, SETarray, SETarraySize); 
-
+	
+	
+	/*
 	alarm(timeout);
 
 	char buf[255];
@@ -132,6 +120,21 @@ void llopen(int fd)
 	if(retries == 3) {
 		printf("didnt work");
 	}
+	*/
+}
+
+void sendSET(int fd) {
+
+	char SETarray[5];
+	SETarray[0] = FLAG;
+	SETarray[1] = A;
+	SETarray[2] = SET_C;
+	SETarray[3] = SET_BCC1;
+	SETarray[4] = FLAG;
+
+	size_t SETarraySize = sizeof(SETarray)/sizeof(SETarray[0]);
+
+	write(fd, SETarray, SETarraySize); 
 }
 
 
