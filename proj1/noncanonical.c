@@ -74,16 +74,16 @@ void llopen(int fd) {
 
 
 	if( caughtSET(fd) ) {
-		printf("SET frame received");
-		//sendUA(fd);
-		//printf("UA frame sent");
+		printf("SET frame received \n");
+		sendUA(fd);
+		printf("UA frame sent \n");
 	}
 }
 
 
 int caughtSET(int fd) {
 
-	char c;
+	unsigned char c;
 	enum state_machine state = START;
 
 	while(state != DONE) {
@@ -108,7 +108,7 @@ int caughtSET(int fd) {
 				break;
 
 			case(A_RCV):
-				if(c == C_RCV)
+				if(c == SET_C)
 					state = C_RCV;
 				else {
 					if(c == FLAG)
@@ -130,7 +130,7 @@ int caughtSET(int fd) {
 				break;
 
 			case(BCC1_RCV):
-				if(c == FLAG_RCV)
+				if(c == FLAG)
 					state = DONE;
 				else
 					state = START;	
