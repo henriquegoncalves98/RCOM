@@ -8,9 +8,12 @@
 #include <unistd.h>
 #include <signal.h>
 
+enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, DONE};
 
-void llopen(int fd);
+int llopen(int fd);
 
 void sendSET(int fd);
+
+void caughtUA(enum state_machine *state, unsigned char *c);
 
 void llclose(int fd);
