@@ -20,16 +20,16 @@ volatile int STOP=FALSE;
 struct termios oldtio, newtio;
 int timeout = 3;
 int retries = 0;
-int resend = 0;
-int received = 0;
+int resend = FALSE;
+int received = FALSE;
 
 
-static void alarmHandler()
+static void alarmHandler(int sig)
 {
-  printf("Nothing received");
+  printf("Nothing received\n");
   retries++;
-  resend = 1;
-  received = 0;
+  resend = TRUE;
+  received = FALSE;
 }
 
 
@@ -51,7 +51,7 @@ int fd;
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
 
-	//signal(SIGALRM, alarmHandler);
+	(void) signal(SIGALRM, alarmHandler);
 
 	if( llopen(fd) == 0 ) {
 		printf("Failed to make a connection to the receiver \n");
@@ -82,7 +82,7 @@ int llopen(int fd)
 	/* set input mode (non-canonical, no echo,...) */
 	newtio.c_lflag = 0;
 
-	newtio.c_cc[VTIME]    = 1;   /* inter-character timer unused */
+	newtio.c_cc[VTIME]    = 30;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 1 char received */
 
 
@@ -101,26 +101,27 @@ int llopen(int fd)
 
 	alarm(timeout);
 
-	char buf[255];
 
 	enum state_machine state = START;
 	unsigned char c;
 
 	while( !received && (retries != 3) ) {
 
-		if( resend ) { 
+		if( resend ) { printf("110\n"); 
 			sendSET(fd);
 			alarm(timeout);
-			resend = 0;
+			resend = FALSE;
 			state = START;
 		}
-
 		else {
 			read(fd, &c, 1);
 			caughtUA(&state, &c);
 
 			if(state == DONE)
-				received = 1;
+			{
+				printf("UA received");
+				received = TRUE;
+			}
 		}
 	}
 
@@ -136,7 +137,7 @@ void sendSET(int fd) {
 
 	char SETarray[5];
 	SETarray[0] = FLAG;
-	SETarray[1] = A;
+	SETarray[1] = 0x08;
 	SETarray[2] = SET_C;
 	SETarray[3] = SET_BCC1;
 	SETarray[4] = FLAG;
