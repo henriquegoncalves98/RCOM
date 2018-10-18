@@ -13,6 +13,12 @@
 #define UA_C 				0x07
 #define SET_BCC1 			A^SET_C
 #define UA_BCC1 			A^UA_C
+#define C0					0x00
+#define C1					0x40
+#define RR0_C				0x05
+#define RR1_C				0x85
+#define REJ0_C				0x01
+#define REJ1_C				0x81
 
 
 volatile int STOP=FALSE;
@@ -22,11 +28,13 @@ int timeout = 3;
 int retries = 0;
 int resend = FALSE;
 int received = FALSE;
+int messageToSend = 0;
+int acknowladgement = 0;
 
 
 static void alarmHandler(int sig)
 {
-  printf("Nothing received\n");
+  printf("Failed to receive frame! \n");
   retries++;
   resend = TRUE;
   received = FALSE;
@@ -35,7 +43,7 @@ static void alarmHandler(int sig)
 
 int main(int argc, char** argv)
 {
-int fd;
+	int fd;
 
 	//PORT CONFIGURATION AND OPENING PORTS
 	if ( (argc < 2) || 
@@ -57,6 +65,58 @@ int fd;
 		printf("Failed to make a connection to the receiver \n");
 		return -1;
 	}
+	
+	//cria mensagem a enviar
+	char message1[2];
+	message1[0] = 0x34;
+	message1[1] = 0x35;
+
+	char message2[2];
+	message2[0] = 0x36;
+	message2[1] = 0x37;
+	
+	//envia mensagem
+	llwrite(fd, message1, 2);
+
+	//ativa alarme
+	alarm(timeout);
+
+	//verifica se recebeu um acknolagement
+	enum state_machine state = START;
+	unsigned char c;
+	
+	while( !received && (retries != 3) ) {
+
+		if( resend ) { 
+			if(messageToSend == 0) {
+				llwrite(fd, message1, 2);
+				alarm(timeout);
+				resend = FALSE;
+				state = START;
+			}
+			else {
+				llwrite(fd, message2, 2);
+				alarm(timeout);
+				resend = FALSE;
+				state = START;
+			}
+		}
+		else {
+			read(fd, &c, 1);
+			caughtACK(&state, &c);
+
+			if(state == DONE)
+			{
+				printf("UA received \n");
+				received = TRUE;
+			}
+		}
+	}
+	//acknolagement == ACK, envia a proxima mensagem
+	//acknolagement == NACK, envia a mesma mensagem
+	//caso alarme acione. Manda a mensagem actual
+
+
 
 	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
 
@@ -82,7 +142,7 @@ int llopen(int fd)
 	/* set input mode (non-canonical, no echo,...) */
 	newtio.c_lflag = 0;
 
-	newtio.c_cc[VTIME]    = 30;   /* inter-character timer unused */
+	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 1 char received */
 
 
@@ -104,10 +164,10 @@ int llopen(int fd)
 
 	enum state_machine state = START;
 	unsigned char c;
-
+	
 	while( !received && (retries != 3) ) {
 
-		if( resend ) { printf("110\n"); 
+		if( resend ) { 
 			sendSET(fd);
 			alarm(timeout);
 			resend = FALSE;
@@ -119,14 +179,14 @@ int llopen(int fd)
 
 			if(state == DONE)
 			{
-				printf("UA received");
+				printf("UA received \n");
 				received = TRUE;
 			}
 		}
 	}
 
 	if(retries == 3) {
-		printf("didnt work");
+		printf("Number of tries exceeded the maximum value \n");
 		return 0;
 	}
 
@@ -137,7 +197,7 @@ void sendSET(int fd) {
 
 	char SETarray[5];
 	SETarray[0] = FLAG;
-	SETarray[1] = 0x08;
+	SETarray[1] = A;
 	SETarray[2] = SET_C;
 	SETarray[3] = SET_BCC1;
 	SETarray[4] = FLAG;
@@ -149,56 +209,123 @@ void sendSET(int fd) {
 
 void caughtUA(enum state_machine *state, unsigned char *c) {
 
-	while(*state != DONE) {
+	switch(*state) {
+		case(START):
+			if(*c == FLAG)
+				*state = FLAG_RCV;
+			break;
+		
+		case(FLAG_RCV):
+			if(*c == A)
+				*state = A_RCV;
+			else {
+				if(*c == FLAG)
+					break;
+				else
+					*state = START;
+			}
+			break;
 
-		switch(*state) {
-			case(START):
+		case(A_RCV):
+			if(*c == UA_C)
+				*state = C_RCV;
+			else {
 				if(*c == FLAG)
 					*state = FLAG_RCV;
-				break;
-			
-			case(FLAG_RCV):
-				if(*c == A)
-					*state = A_RCV;
-				else {
-					if(*c == FLAG)
-						break;
-					else
-						*state = START;
-				}
-				break;
-
-			case(A_RCV):
-				if(*c == UA_C)
-					*state = C_RCV;
-				else {
-					if(*c == FLAG)
-						*state = FLAG_RCV;
-					else
-						*state = START;
-				}
-				break;
-			
-			case(C_RCV):
-				if(*c == UA_BCC1)
-					*state = BCC1_RCV;
-				else {
-					if(*c == FLAG)
-						*state = FLAG_RCV;
-					else
-						*state = START;
-				}
-				break;
-
-			case(BCC1_RCV):
-				if(*c == FLAG)
-					*state = DONE;
 				else
-					*state = START;	
+					*state = START;
+			}
+			break;
+		
+		case(C_RCV):
+			if(*c == UA_BCC1)
+				*state = BCC1_RCV;
+			else {
+				if(*c == FLAG)
+					*state = FLAG_RCV;
+				else
+					*state = START;
+			}
+			break;
 
-				break;
-		}
+		case(BCC1_RCV):
+			if(*c == FLAG)
+				*state = DONE;
+			else
+				*state = START;	
+
+			break;
 	}
+	
+}
+
+void checkACK(enum state_machine *state, unsigned char *c) {
+
+	switch(*state) {
+		case(START):
+			if(*c == FLAG)
+				*state = FLAG_RCV;
+			break;
+	
+		case(FLAG_RCV):
+			if(*c == A)
+				*state = A_RCV;
+			else {
+				if(*c == FLAG)
+					break;
+				else
+					*state = START;
+			}
+			break;
+
+		case(A_RCV):
+			if(*c == UA_C)
+				*state = C_RCV;
+			else {
+				if(*c == FLAG)
+					*state = FLAG_RCV;
+				else
+					*state = START;
+			}
+			break;
+	
+		case(C_RCV):
+			if(
+			if(*c == ACK)
+				*state = BCC1_RCV;
+			else {
+				if(*c == FLAG)
+					*state = FLAG_RCV;
+				else
+					*state = START;
+			}
+			break;
+
+		case(BCC1_RCV):
+			if(*c == FLAG)
+				*state = DONE;
+			else
+				*state = START;	
+
+			break;
+	}
+}
+
+int llwrite(int fd, char * buffer, int length) {
+
+	char Iarray[6];
+	Iarray[0] = FLAG;
+	Iarray[1] = A;
+	Iarray[2] = 0x00;
+	Iarray[3] = SET_BCC1;
+	Iarray[4] = &buffer[0];
+	Iarray[5] = &buffer[1];
+	Iarray[6] = FLAG;
+
+	size_t IarraySize = sizeof(Iarray)/sizeof(Iarray[0]);
+
+	write(fd, Iarray, IarraySize); 
+
 }
 
 

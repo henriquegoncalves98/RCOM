@@ -16,4 +16,8 @@ void sendSET(int fd);
 
 void caughtUA(enum state_machine *state, unsigned char *c);
 
+void checkACK(enum state_machine *state, unsigned char *c);
+
+int llwrite(int fd, char * buffer, int length);
+
 void llclose(int fd);
