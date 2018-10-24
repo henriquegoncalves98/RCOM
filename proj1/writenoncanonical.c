@@ -20,6 +20,10 @@
 #define REJ0_C				0x01
 #define REJ1_C				0x81
 
+#define ESCAPE			    0x7D
+#define ESCAPE_FLAG         0x5E
+#define ESCAPE_ESCAPE       0x5D
+
 
 volatile int STOP=FALSE;
 
@@ -327,6 +331,45 @@ int llwrite(int fd, char * buffer, int length) {
 	write(fd, Iarray, IarraySize); 
 
 }
+
+
+unsigned char calculoBCC2(unsigned char *mensagem, int size)
+{
+  unsigned char BCC2 = mensagem[0];
+  int i;
+  for (i = 1; i < size; i++)
+  {
+    BCC2 ^= mensagem[i];
+  }
+  return BCC2;
+}
+
+
+unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2)
+{
+  unsigned char *BCC2Stuffed;
+  if (BCC2 == FLAG)
+  {
+    BCC2Stuffed = (unsigned char *)malloc(2 * sizeof(unsigned char));
+    BCC2Stuffed[0] = ESCAPE;
+    BCC2Stuffed[1] = ESCAPE_FLAG;
+    (*sizeBCC2)++;
+  }
+  else
+  {
+    if (BCC2 == ESCAPE)
+    {
+      BCC2Stuffed = (unsigned char *)malloc(2 * sizeof(unsigned char *));
+      BCC2Stuffed[0] = ESCAPE;
+      BCC2Stuffed[1] = ESCAPE_ESCAPE;
+      (*sizeBCC2)++;
+    }
+  }
+
+  return BCC2Stuffed;
+}
+
+
 
 
 void llclose(int fd) {

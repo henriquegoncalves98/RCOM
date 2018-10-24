@@ -20,4 +20,8 @@ void checkACK(enum state_machine *state, unsigned char *c);
 
 int llwrite(int fd, char * buffer, int length);
 
+unsigned char calculoBCC2(unsigned char *mensagem, int size);
+
+unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2);
+
 void llclose(int fd);
