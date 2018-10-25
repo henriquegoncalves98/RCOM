@@ -82,12 +82,18 @@ int main(int argc, char** argv)
 	//envia mensagem
 	llwrite(fd, message1, 2);
 
+	//ISTO VAI PARA O LLWRITE!!!!!!!!!!!!!!!!!!!!!!!!apagar depois
 	//ativa alarme
 	alarm(timeout);
 
 	//verifica se recebeu um acknolagement
 	enum state_machine state = START;
 	unsigned char c;
+
+	//reset time out parameters
+	retries = 0;
+	resend = FALSE;
+	received = FALSE;
 	
 	while( !received && (retries != 3) ) {
 
@@ -263,7 +269,7 @@ void caughtUA(enum state_machine *state, unsigned char *c) {
 	
 }
 
-void checkACK(enum state_machine *state, unsigned char *c) {
+void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) {
 
 	switch(*state) {
 		case(START):
@@ -276,15 +282,18 @@ void checkACK(enum state_machine *state, unsigned char *c) {
 				*state = A_RCV;
 			else {
 				if(*c == FLAG)
-					break;
+					*state = FLAG_RCV;
 				else
 					*state = START;
 			}
 			break;
 
 		case(A_RCV):
-			if(*c == UA_C)
+			if(*c == RR0_C || *c == RR1_C || *c == REJ0_C || *c == REJ1_C)
+			{
 				*state = C_RCV;
+				*ctrl = *c;
+			}
 			else {
 				if(*c == FLAG)
 					*state = FLAG_RCV;
@@ -294,20 +303,18 @@ void checkACK(enum state_machine *state, unsigned char *c) {
 			break;
 	
 		case(C_RCV):
-			if(
-			if(*c == ACK)
+			if(*c == (A ^ *ctrl))
 				*state = BCC1_RCV;
 			else {
-				if(*c == FLAG)
-					*state = FLAG_RCV;
-				else
 					*state = START;
 			}
 			break;
 
 		case(BCC1_RCV):
 			if(*c == FLAG)
+			{
 				*state = DONE;
+			}
 			else
 				*state = START;	
 
@@ -317,18 +324,110 @@ void checkACK(enum state_machine *state, unsigned char *c) {
 
 int llwrite(int fd, char * buffer, int length) {
 
-	char Iarray[6];
+	unsigned char BCC2;
+  	unsigned char *BCC2Stuffed = (unsigned char *)malloc(sizeof(unsigned char));
+	unsigned char *Iarray = (unsigned char *)malloc((length + 6) * sizeof(unsigned char));
+
+	int IarraySize = length + 6;
+  	int sizeBCC2 = 1;
+  	BCC2 = calculoBCC2(mensagem, size);
+	BCC2Stuffed = stuffingBCC2(BCC2, &sizeBCC2);
+
 	Iarray[0] = FLAG;
 	Iarray[1] = A;
-	Iarray[2] = 0x00;
+	
+	if(messageToSend == 0)
+	{
+		Iarray[2] = C0;
+	}
+	else {
+		Iarray[2] = C1;
+	}
+
 	Iarray[3] = SET_BCC1;
-	Iarray[4] = &buffer[0];
-	Iarray[5] = &buffer[1];
-	Iarray[6] = FLAG;
 
-	size_t IarraySize = sizeof(Iarray)/sizeof(Iarray[0]);
+	int i = 0;
+	int j = 4;
+	//stuffing and attributing data to frame I
+	for(; i < length;i++)
+	{
+		if(buffer[i] == FLAG)
+		{
+			Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
+			Iarray[j] = ESCAPE;
+			Iarray[j + 1] = ESCAPE_FLAG;
+			j += 2;
+		} 
+		else if(buffer[i] == ESCAPE)
+		{
+			Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
+			Iarray[j] = ESCAPE;
+			Iarray[j + 1] = ESCAPE_ESCAPE;
+			j += 2;
+		}
+		else
+		{
+			Iarray[j] = buffer[i];
+			j++;
+		}
+	}
 
-	write(fd, Iarray, IarraySize); 
+	if(sizeBCC2 == 1)
+	{
+		Iarray[j] = BCC2;
+		j++;
+	}
+	else
+	{
+		Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
+		Iarray[j] = BCC2Stuffed[0];
+		Iarray[j+1] = BCC2Stuffed[1];
+		j += 2;
+	}
+
+	Iarray[j] = FLAG;
+
+	//send message now
+
+	write(fd, Iarray, IarraySize);
+
+	//ativa alarme
+	alarm(timeout);
+
+	//verifica se recebeu um acknolagement
+	enum state_machine state = START;
+	unsigned char c;
+	unsigned char ctrl;
+
+	//reset time out parameters
+	retries = 0;
+	resend = FALSE;
+	received = FALSE;
+
+	while( !received && (retries != 3) ) {
+
+		if( resend ) { 
+			write(fd, Iarray, IarraySize);
+			alarm(timeout);
+			resend = FALSE;
+			state = START;
+		}
+		else {
+			read(fd, &c, 1);
+			caughtACK(&state, &c, &ctrl);
+
+			if(state == DONE)
+			{
+				printf("ACK/NACK received \n");
+				received = TRUE;
+			}
+		}
+	}
+	//acknolagement == ACK, envia a proxima mensagem
+	//acknolagement == NACK, envia a mesma mensagem
+	//caso alarme acione. Manda a mensagem actual
+
+	//falta processar o CTRL!!!!!!!!
 
 }
 
