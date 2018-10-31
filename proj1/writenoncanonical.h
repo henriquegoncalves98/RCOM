@@ -8,6 +8,24 @@
 #include <unistd.h>
 #include <signal.h>
 
+#define FLAG 				0x7E
+#define A 					0x03
+#define SET_C 				0x03
+#define UA_C 				0x07
+#define SET_BCC1 			A^SET_C
+#define UA_BCC1 			A^UA_C
+#define C0					0x00
+#define C1					0x40
+#define RR0_C				0x05
+#define RR1_C				0x85
+#define REJ0_C				0x01
+#define REJ1_C				0x81
+#define DISC				0x0B
+
+#define ESCAPE			    0x7D
+#define ESCAPE_FLAG         0x5E
+#define ESCAPE_ESCAPE       0x5D
+
 enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, DONE};
 
 int llopen(int fd);

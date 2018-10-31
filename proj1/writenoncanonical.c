@@ -7,33 +7,16 @@
 #define FALSE 				0
 #define TRUE 				1
 
-#define FLAG 				0x7E
-#define A 					0x03
-#define SET_C 				0x03
-#define UA_C 				0x07
-#define SET_BCC1 			A^SET_C
-#define UA_BCC1 			A^UA_C
-#define C0					0x00
-#define C1					0x40
-#define RR0_C				0x05
-#define RR1_C				0x85
-#define REJ0_C				0x01
-#define REJ1_C				0x81
-
-#define ESCAPE			    0x7D
-#define ESCAPE_FLAG         0x5E
-#define ESCAPE_ESCAPE       0x5D
-
 
 volatile int STOP=FALSE;
 
 struct termios oldtio, newtio;
 int timeout = 3;
 int retries = 0;
+int NUM_RETRIES = 3;
 int resend = FALSE;
 int received = FALSE;
 int messageToSend = 0;
-int acknowladgement = 0;
 
 
 static void alarmHandler(int sig)
@@ -81,51 +64,6 @@ int main(int argc, char** argv)
 	
 	//envia mensagem
 	llwrite(fd, message1, 2);
-
-	//ISTO VAI PARA O LLWRITE!!!!!!!!!!!!!!!!!!!!!!!!apagar depois
-	//ativa alarme
-	alarm(timeout);
-
-	//verifica se recebeu um acknolagement
-	enum state_machine state = START;
-	unsigned char c;
-
-	//reset time out parameters
-	retries = 0;
-	resend = FALSE;
-	received = FALSE;
-	
-	while( !received && (retries != 3) ) {
-
-		if( resend ) { 
-			if(messageToSend == 0) {
-				llwrite(fd, message1, 2);
-				alarm(timeout);
-				resend = FALSE;
-				state = START;
-			}
-			else {
-				llwrite(fd, message2, 2);
-				alarm(timeout);
-				resend = FALSE;
-				state = START;
-			}
-		}
-		else {
-			read(fd, &c, 1);
-			caughtACK(&state, &c);
-
-			if(state == DONE)
-			{
-				printf("UA received \n");
-				received = TRUE;
-			}
-		}
-	}
-	//acknolagement == ACK, envia a proxima mensagem
-	//acknolagement == NACK, envia a mesma mensagem
-	//caso alarme acione. Manda a mensagem actual
-
 
 
 	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
@@ -175,7 +113,7 @@ int llopen(int fd)
 	enum state_machine state = START;
 	unsigned char c;
 	
-	while( !received && (retries != 3) ) {
+	while( !received && (retries != NUM_RETRIES) ) {
 
 		if( resend ) { 
 			sendSET(fd);
@@ -195,7 +133,7 @@ int llopen(int fd)
 		}
 	}
 
-	if(retries == 3) {
+	if(retries == NUM_RETRIES) {
 		printf("Number of tries exceeded the maximum value \n");
 		return 0;
 	}
@@ -305,8 +243,11 @@ void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) 
 		case(C_RCV):
 			if(*c == (A ^ *ctrl))
 				*state = BCC1_RCV;
+			else if(*c == FLAG){
+				*state = FLAG_RCV;
+			}
 			else {
-					*state = START;
+				*state = START;
 			}
 			break;
 
@@ -330,7 +271,7 @@ int llwrite(int fd, char * buffer, int length) {
 
 	int IarraySize = length + 6;
   	int sizeBCC2 = 1;
-  	BCC2 = calculoBCC2(mensagem, size);
+  	BCC2 = calculoBCC2(buffer, length);
 	BCC2Stuffed = stuffingBCC2(BCC2, &sizeBCC2);
 
 	Iarray[0] = FLAG;
@@ -344,7 +285,7 @@ int llwrite(int fd, char * buffer, int length) {
 		Iarray[2] = C1;
 	}
 
-	Iarray[3] = SET_BCC1;
+	Iarray[3] = Iarray[1] ^ Iarray[2];
 
 	int i = 0;
 	int j = 4;
@@ -387,48 +328,79 @@ int llwrite(int fd, char * buffer, int length) {
 
 	Iarray[j] = FLAG;
 
-	//send message now
-
-	write(fd, Iarray, IarraySize);
-
-	//ativa alarme
-	alarm(timeout);
-
-	//verifica se recebeu um acknolagement
-	enum state_machine state = START;
-	unsigned char c;
-	unsigned char ctrl;
-
 	//reset time out parameters
 	retries = 0;
 	resend = FALSE;
 	received = FALSE;
 
-	while( !received && (retries != 3) ) {
+	int repeat_frame = TRUE;
 
-		if( resend ) { 
-			write(fd, Iarray, IarraySize);
-			alarm(timeout);
-			resend = FALSE;
-			state = START;
-		}
-		else {
-			read(fd, &c, 1);
-			caughtACK(&state, &c, &ctrl);
+	//send I message now
+	do
+	{
+		write(fd, Iarray, IarraySize);
 
-			if(state == DONE)
-			{
-				printf("ACK/NACK received \n");
-				received = TRUE;
+		//ativa alarme
+		alarm(timeout);
+
+		//verifica se recebeu um acknolagement
+		enum state_machine state = START;
+		unsigned char c;
+		unsigned char ctrl;
+
+
+		while( !received && (retries != NUM_RETRIES) ) {
+
+			if( resend ) { 
+				write(fd, Iarray, IarraySize);
+				alarm(timeout);
+				resend = FALSE;
+				state = START;
 			}
+			else {
+				read(fd, &c, 1);
+				caughtACK(&state, &c, &ctrl);
+
+				if(state == DONE)
+				{
+					printf("ACK/NACK received \n");
+					received = TRUE;
+				}
+			}
+		 }
+		//acknolagement == ACK, envia a proxima mensagem
+		//acknolagement == NACK, envia a mesma mensagem
+		//caso alarme acione. Manda a mensagem actual
+
+		if ((*ctrl == RR1_C && messageToSend == 0) || (*ctrl == RR0_C && messageToSend == 1))
+		{
+			if(*ctrl == RR1_C)
+				printf("RECEIVED RR1\n");
+			else printf("RECEIVED RR0\n");
+
+			repeat_frame = FALSE;
+			retries = 0;
+			messageToSend ^= 1;
 		}
-	}
-	//acknolagement == ACK, envia a proxima mensagem
-	//acknolagement == NACK, envia a mesma mensagem
-	//caso alarme acione. Manda a mensagem actual
+		else if (*ctrl == REJ0_C || *ctrl == REJ1_C)
+		{
+			if(*ctrl == REJ1_C)
+				printf("RECEIVED REJ1\n");
+			else printf("RECEIVED REJ0\n");
 
-	//falta processar o CTRL!!!!!!!!
+			repeat_frame = TRUE;
+			retries = 0;
+			messageToSend ^= 1;
+		
+		}
 
+	} while(repeat_frame);
+
+
+	if (retries >= NUM_RETRIES)
+		return FALSE;
+	else
+		return TRUE;
 }
 
 
