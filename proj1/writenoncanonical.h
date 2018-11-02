@@ -21,6 +21,9 @@
 #define REJ0_C				0x01
 #define REJ1_C				0x81
 #define DISC				0x0B
+#define C_START             0x02
+#define T1                  0x00
+
 
 #define ESCAPE			    0x7D
 #define ESCAPE_FLAG         0x5E
@@ -34,12 +37,16 @@ void sendSET(int fd);
 
 void caughtUA(enum state_machine *state, unsigned char *c);
 
-void checkACK(enum state_machine *state, unsigned char *c);
+void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl);
 
 int llwrite(int fd, char * buffer, int length);
 
 unsigned char calculoBCC2(unsigned char *mensagem, int size);
 
 unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2);
+
+unsigned char *readFile(unsigned char *fileName, off_t *fileSize);
+
+unsigned char *makeStartFrame(off_t fileSize, unsigned char *fileName, int fileNameSize);
 
 void llclose(int fd);
