@@ -5,7 +5,7 @@
 #define _POSIX_SOURCE 		1 /* POSIX compliant source */
 #define FALSE 				0
 #define TRUE 				1
-			
+
 
 volatile int STOP=FALSE;
 
@@ -15,10 +15,10 @@ struct termios oldtio,newtio;
 
 int main(int argc, char** argv) {
 	int fd;
-	
+
 	//PORT CONFIGURATION AND OPENING PORTS
-	if ( (argc < 2) || 
-	((strcmp("/dev/ttyS0", argv[1])!=0) && 
+	if ( (argc < 2) ||
+	((strcmp("/dev/ttyS0", argv[1])!=0) &&
 	(strcmp("/dev/ttyS1", argv[1])!=0) )) {
 	printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
 		exit(1);
@@ -26,10 +26,10 @@ int main(int argc, char** argv) {
 
 	fd = open(argv[1], O_RDWR | O_NOCTTY );
 	if (fd <0) {
-		perror(argv[1]); exit(-1); 
+		perror(argv[1]); exit(-1);
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
-	
+
 
 	llopen(fd);
 
@@ -47,12 +47,12 @@ int main(int argc, char** argv) {
 }
 
 void llopen(int fd) {
-	
-	if ( tcgetattr(fd,&oldtio) == -1) {  //save current port settings 
+
+	if ( tcgetattr(fd,&oldtio) == -1) {  //save current port settings
 		perror("tcgetattr");
 		exit(-1);
 	}
-	
+
 
 	bzero(&newtio, sizeof(newtio));
 	newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
@@ -65,14 +65,14 @@ void llopen(int fd) {
 	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
 
-	
+
 	tcflush(fd, TCIOFLUSH);
 
 	if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
-	
+
 
 	printf("New termios structure set\n");
 
@@ -98,7 +98,7 @@ int caughtSUFrame(int fd, unsigned char CFlag) {
 				if(c == FLAG)
 					state = FLAG_RCV;
 				break;
-			
+
 			case(FLAG_RCV):
 				if(c == A)
 					state = A_RCV;
@@ -120,7 +120,7 @@ int caughtSUFrame(int fd, unsigned char CFlag) {
 						state = START;
 				}
 				break;
-			
+
 			case(C_RCV):
 				if(c == SET_BCC1)
 					state=BCC1_RCV;
@@ -136,7 +136,7 @@ int caughtSUFrame(int fd, unsigned char CFlag) {
 				if(c == FLAG)
 					state = DONE;
 				else
-					state = START;	
+					state = START;
 
 				break;
 		}
@@ -151,7 +151,7 @@ int caughtSUFrame(int fd, unsigned char CFlag) {
 */
 
 int llread(int fd, unsigned char * buffer) {
-	
+
 	//TODO Quando BCC2 errado, Se se tratar dum duplicado, deve fazer-se confirmação com RR
 	buffer = (unsigned char *)malloc(0);
 	int sizeBuffer = 0;
@@ -169,7 +169,7 @@ int llread(int fd, unsigned char * buffer) {
 				if(c == FLAG)
 					state = FLAG_RCV;
 				break;
-			
+
 			case(FLAG_RCV):
 				if(c == A)
 					state = A_RCV;
@@ -199,7 +199,7 @@ int llread(int fd, unsigned char * buffer) {
 						state = START;
 				}
 				break;
-			
+
 			case(C_RCV):
 				if( c == (A ^ C_Flag) )
 					state = BCC1_RCV;
@@ -215,7 +215,7 @@ int llread(int fd, unsigned char * buffer) {
 							sendAcknowlegment(fd, RR_C1);
 						else
 							sendAcknowlegment(fd, RR_C0);
-						
+
 						state = DONE;
 					}
 					else {
@@ -227,7 +227,7 @@ int llread(int fd, unsigned char * buffer) {
 						state = DONE;
 						sizeBuffer = -1;
 					}
-				} 
+				}
 				else if(c == ESCAPE) {
 
 					state = ESCAPING;
@@ -241,14 +241,14 @@ int llread(int fd, unsigned char * buffer) {
 
 			case(ESCAPING):
 				if( c == ESCAPE_FLAG )
-					
-					buffer = (unsigned char *)realloc(buffer, ++(sizeBuffer));
-       				buffer[sizeBuffer - 1] = FLAG;
-					
+				{
+						buffer = (unsigned char *)realloc(buffer, ++(sizeBuffer));
+						buffer[sizeBuffer - 1] = FLAG;
+				}
 				else if(c == ESCAPE_ESCAPE){
-					
-					buffer = (unsigned char *)realloc(buffer, ++(sizeBuffer));
-       				buffer[sizeBuffer - 1] = ESCAPE;
+
+						buffer = (unsigned char *)realloc(buffer, ++(sizeBuffer));
+       			buffer[sizeBuffer - 1] = ESCAPE;
 				}
 				else{
 
@@ -307,9 +307,9 @@ void sendAcknowlegment(int fd, unsigned char c) {
 }
 
 void llclose(int fd) {
-	
+
 	tcsetattr(fd,TCSANOW,&oldtio);
-	
+
 
 	caughtSUFrame(fd, DISC_C);
 	printf("DISC frame received \n");
