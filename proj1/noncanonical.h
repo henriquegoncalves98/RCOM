@@ -21,12 +21,16 @@
 #define REJ_C1              0x81 
 #define DISC_C              0x0B
 
+#define ESCAPE			    0x7D
+#define ESCAPE_FLAG         0x5E
+#define ESCAPE_ESCAPE       0x5D
 
-enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, DONE};
+
+enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, ESCAPING, DONE};
 
 void llopen(int fd);
 
-unsigned char *llread(int fd);
+int llread(int fd, unsigned char * buffer);
 
 int caughtSUFrame(int fd, unsigned char CFlag);
 

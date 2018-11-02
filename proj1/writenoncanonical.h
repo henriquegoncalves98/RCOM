@@ -20,7 +20,7 @@
 #define RR1_C				0x85
 #define REJ0_C				0x01
 #define REJ1_C				0x81
-#define DISC				0x0B
+#define DISC_C				0x0B
 #define C_START             0x02
 #define T1                  0x00
 
@@ -29,7 +29,7 @@
 #define ESCAPE_FLAG         0x5E
 #define ESCAPE_ESCAPE       0x5D
 
-enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, DONE};
+enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, ESCAPING, DONE};
 
 int llopen(int fd);
 

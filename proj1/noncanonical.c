@@ -9,6 +9,7 @@
 
 volatile int STOP=FALSE;
 
+int messageToReceive = 0;
 struct termios oldtio,newtio;
 
 
@@ -34,7 +35,7 @@ int main(int argc, char** argv) {
 
 	unsigned char *startFrame;
 
-	startFrame = llread(fd);
+	llread(fd,startFrame);
 
 	// TODO processar a recepcao da mensagem
 
@@ -144,11 +145,16 @@ int caughtSUFrame(int fd, unsigned char CFlag) {
 	return TRUE;
 }
 
+/*
+* Read from file descriptor fd and puts the data read in buffer
+* @return negative if failed or the number of characters read, basicly the sizes of buffer if there was no error
+*/
 
-unsigned char *llread(int fd) {
+int llread(int fd, unsigned char * buffer) {
 	
-	// TODO finalizar llread
-
+	//TODO Quando BCC2 errado, Se se tratar dum duplicado, deve fazer-se confirmação com RR
+	buffer = (unsigned char *)malloc(0);
+	int sizeBuffer = 0;
 	unsigned char c;
 	enum state_machine state = START;
 	unsigned char C_Flag;
@@ -197,9 +203,6 @@ unsigned char *llread(int fd) {
 			case(C_RCV):
 				if( c == (A ^ C_Flag) )
 					state = BCC1_RCV;
-				else if(c == FLAG) {
-					state = FLAG_RCV;
-				}
 				else {
 					state = START;
 				}
@@ -207,7 +210,7 @@ unsigned char *llread(int fd) {
 
 			case(BCC1_RCV):
 				if(c == FLAG) {
-					if( hasBCC2() ) {
+					if( hasBCC2(buffer, sizeBuffer) ) {
 						if( frameNumber == 0)
 							sendAcknowlegment(fd, RR_C1);
 						else
@@ -217,26 +220,76 @@ unsigned char *llread(int fd) {
 					}
 					else {
 						if( frameNumber == 0)
-							sendAcknowlegment(fd, REJ_C1);
-						else
 							sendAcknowlegment(fd, REJ_C0);
+						else
+							sendAcknowlegment(fd, REJ_C1);
 
 						state = DONE;
+						sizeBuffer = -1;
 					}
+				} 
+				else if(c == ESCAPE) {
+
+					state = ESCAPING;
 				}
+				else {
+					buffer = (unsigned char *)realloc(buffer, ++sizeBuffer);
+       				buffer[sizeBuffer - 1] = c;
+				}
+
+				break;
+
+			case(ESCAPING):
+				if( c == ESCAPE_FLAG )
+					
+					buffer = (unsigned char *)realloc(buffer, ++(sizeBuffer));
+       				buffer[sizeBuffer - 1] = FLAG;
+					
+				else if(c == ESCAPE_ESCAPE){
+					
+					buffer = (unsigned char *)realloc(buffer, ++(sizeBuffer));
+       				buffer[sizeBuffer - 1] = ESCAPE;
+				}
+				else{
+
+					perror("Non valid character after escape character");
+          			exit(-1);
+				}
+				state = BCC1_RCV;
+
 				break;
 		}
 	}
+
+	printf("Frame size: %d\n", sizeBuffer);
+	//frame tem BCC2 no fim
+	buffer = (unsigned char *)realloc(buffer, --sizeBuffer);
+
+	if (sizeBuffer > 0)
+	{
+		if (frameNumber == messageToReceive)
+		{
+			messageToReceive ^= 1;
+		}
+		else
+			sizeBuffer = -1;
+	}
+
+	return sizeBuffer;
 }
 
-int hasBCC2() {
+int hasBCC2(unsigned char *buffer, int sizebuffer) {
 
-	// TODO finalizaar has BCC2
-	
-	int var = TRUE;
-
-	if(var)
+	int i = 1;
+	unsigned char BCC2 = buffer[0];
+	for (; i < sizebuffer - 1; i++)
+	{
+		BCC2 ^= buffer[i];
+	}
+	if (BCC2 == buffer[sizebuffer - 1])
+	{
 		return TRUE;
+	}
 	else
 		return FALSE;
 }

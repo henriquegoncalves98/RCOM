@@ -250,9 +250,6 @@ void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) 
 		case(C_RCV):
 			if(*c == (A ^ *ctrl))
 				*state = BCC1_RCV;
-			else if(*c == FLAG){
-				*state = FLAG_RCV;
-			}
 			else {
 				*state = START;
 			}
@@ -382,6 +379,7 @@ int llwrite(int fd, char * buffer, int length) {
 			repeat_frame = FALSE;
 			retries = 0;
 			messageToSend ^= 1;
+			alarm(0);
 		}
 		else if( ctrl == REJ0_C || ctrl == REJ1_C )
 		{
@@ -392,7 +390,7 @@ int llwrite(int fd, char * buffer, int length) {
 
 			repeat_frame = TRUE;
 			retries = 0;
-			messageToSend ^= 1;
+			alarm(0);
 		
 		}
 
