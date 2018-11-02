@@ -5,13 +5,6 @@
 #define _POSIX_SOURCE 		1 /* POSIX compliant source */
 #define FALSE 				0
 #define TRUE 				1
-
-#define FLAG 				0x7E
-#define A 					0x03
-#define SET_C 				0x03
-#define UA_C				0x07
-#define SET_BCC1 			A^SET_C
-#define UA_BCC1 			A^UA_C
 			
 
 volatile int STOP=FALSE;
@@ -19,12 +12,11 @@ volatile int STOP=FALSE;
 struct termios oldtio,newtio;
 
 
-int main(int argc, char** argv)
-{
-int fd;
-
-//PORT CONFIGURATION AND OPENING PORTS
-if ( (argc < 2) || 
+int main(int argc, char** argv) {
+	int fd;
+	
+	//PORT CONFIGURATION AND OPENING PORTS
+	if ( (argc < 2) || 
 	((strcmp("/dev/ttyS0", argv[1])!=0) && 
 	(strcmp("/dev/ttyS1", argv[1])!=0) )) {
 	printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
@@ -36,21 +28,30 @@ if ( (argc < 2) ||
 		perror(argv[1]); exit(-1); 
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
+	
 
 	llopen(fd);
 
-	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
+	unsigned char *startFrame;
+
+	startFrame = llread(fd);
+
+	// TODO processar a recepcao da mensagem
+
+
+	// TODO processar a recepcao do endFrame
 
 	llclose(fd);
 	return 0;
 }
 
 void llopen(int fd) {
-
-	if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
+	
+	if ( tcgetattr(fd,&oldtio) == -1) {  //save current port settings 
 		perror("tcgetattr");
 		exit(-1);
 	}
+	
 
 	bzero(&newtio, sizeof(newtio));
 	newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
@@ -63,25 +64,26 @@ void llopen(int fd) {
 	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
 
+	
 	tcflush(fd, TCIOFLUSH);
 
 	if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
+	
 
 	printf("New termios structure set\n");
 
 
-	if( caughtSET(fd) ) {
+	if( caughtSUFrame(fd, SET_C) ) {
 		printf("SET frame received \n");
-		sendUA(fd);
+		sendAcknowlegment(fd, UA_C);
 		printf("UA frame sent \n");
 	}
 }
 
-
-int caughtSET(int fd) {
+int caughtSUFrame(int fd, unsigned char CFlag) {
 
 	unsigned char c;
 	enum state_machine state = START;
@@ -108,7 +110,7 @@ int caughtSET(int fd) {
 				break;
 
 			case(A_RCV):
-				if(c == SET_C)
+				if(c == CFlag)
 					state = C_RCV;
 				else {
 					if(c == FLAG)
@@ -142,22 +144,128 @@ int caughtSET(int fd) {
 	return TRUE;
 }
 
-void sendUA(int fd) {
 
-	char UAarray[5];
-	UAarray[0] = FLAG;
-	UAarray[1] = A;
-	UAarray[2] = UA_C;
-	UAarray[3] = UA_BCC1;
-	UAarray[4] = FLAG;
+unsigned char *llread(int fd) {
+	
+	// TODO finalizar llread
 
-	size_t UAarraySize = sizeof(UAarray)/sizeof(UAarray[0]);
+	unsigned char c;
+	enum state_machine state = START;
+	unsigned char C_Flag;
+	int frameNumber = 0;
 
-	write(fd, UAarray, UAarraySize);
+	while(state != DONE) {
 
+		read(fd, &c, 1);
+
+		switch(state) {
+			case(START):
+				if(c == FLAG)
+					state = FLAG_RCV;
+				break;
+			
+			case(FLAG_RCV):
+				if(c == A)
+					state = A_RCV;
+				else {
+					if(c == FLAG)
+						break;
+					else
+						state = START;
+				}
+				break;
+
+			case(A_RCV):
+				if(c == C0) {
+					state = BCC1_RCV;
+					C_Flag = c;
+					frameNumber = 0;
+				}
+				else if(c == C1) {
+					state = BCC1_RCV;
+					C_Flag = c;
+					frameNumber = 1;
+				}
+				else {
+					if(c == FLAG)
+						state = FLAG_RCV;
+					else
+						state = START;
+				}
+				break;
+			
+			case(C_RCV):
+				if( c == (A ^ C_Flag) )
+					state = BCC1_RCV;
+				else if(c == FLAG) {
+					state = FLAG_RCV;
+				}
+				else {
+					state = START;
+				}
+				break;
+
+			case(BCC1_RCV):
+				if(c == FLAG) {
+					if( hasBCC2() ) {
+						if( frameNumber == 0)
+							sendAcknowlegment(fd, RR_C1);
+						else
+							sendAcknowlegment(fd, RR_C0);
+						
+						state = DONE;
+					}
+					else {
+						if( frameNumber == 0)
+							sendAcknowlegment(fd, REJ_C1);
+						else
+							sendAcknowlegment(fd, REJ_C0);
+
+						state = DONE;
+					}
+				}
+				break;
+		}
+	}
+}
+
+int hasBCC2() {
+
+	// TODO finalizaar has BCC2
+	
+	int var = TRUE;
+
+	if(var)
+		return TRUE;
+	else
+		return FALSE;
+}
+
+void sendAcknowlegment(int fd, unsigned char c) {
+	unsigned char ackFrame[5];
+
+	ackFrame[0] = FLAG;
+	ackFrame[1] = A;
+	ackFrame[2] = c;
+	ackFrame[3] = ackFrame[1]^ackFrame[2];
+	ackFrame[4] = FLAG;
+
+	write(fd, ackFrame, 5);
 }
 
 void llclose(int fd) {
+	
 	tcsetattr(fd,TCSANOW,&oldtio);
+	
+
+	caughtSUFrame(fd, DISC_C);
+	printf("DISC frame received \n");
+
+	sendAcknowlegment(fd, DISC_C);
+	printf("DISC frame sent \n");
+
+	caughtSUFrame(fd, UA_C);
+	printf("DISC frame received \n");
+
 	close(fd);
 }
