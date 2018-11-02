@@ -31,7 +31,9 @@ static void alarmHandler(int sig)
 int main(int argc, char** argv)
 {
 	int fd;
+	off_t fileSize;
 
+	
 	//PORT CONFIGURATION AND OPENING PORTS
 	if ( (argc < 2) || 
 	  ((strcmp("/dev/ttyS0", argv[1])!=0) && 
@@ -45,6 +47,7 @@ int main(int argc, char** argv)
 		perror(argv[1]); exit(-1); 
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
+	
 
 	(void) signal(SIGALRM, alarmHandler);
 
@@ -53,21 +56,23 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	
-	//cria mensagem a enviar
-	char message1[2];
-	message1[0] = 0x34;
-	message1[1] = 0x35;
+	// TODO mudar nome do ficheiro para argumento do main
+	unsigned char *message = readFile("pinguim.gif", &fileSize);
 
-	char message2[2];
-	message2[0] = 0x36;
-	message2[1] = 0x37;
+	int fileNameSize = strlen("pinguim.gif");
+	unsigned char *fileName = (unsigned char *)malloc(fileNameSize);
+	fileName = "pinguim.gif";
+
+	// TODO acabar makeStartFrame
+	unsigned char *start = makeStartFrame(fileSize, fileName, fileNameSize);
 	
 	//envia mensagem
-	llwrite(fd, message1, 2);
+	llwrite(fd, start, 2);
 
-
+	// TODO tratar do envio da mensagem apos a frame Start
 	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
 
+	// TODO tratar do envio da frame end
 	llclose(fd);
 	return 0;
 }
@@ -76,11 +81,12 @@ int main(int argc, char** argv)
 
 int llopen(int fd)
 {
-
-	if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
+	
+	if ( tcgetattr(fd,&oldtio) == -1) { // save current port settings 
 		perror("tcgetattr");
 		exit(-1);
 	}
+	
 
 	bzero(&newtio, sizeof(newtio));
 	newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
@@ -93,13 +99,14 @@ int llopen(int fd)
 	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 1 char received */
 
-
+	
 	tcflush(fd, TCIOFLUSH);
 
 	if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
+	
 
 	printf("New termios structure set\n");
 
@@ -277,8 +284,7 @@ int llwrite(int fd, char * buffer, int length) {
 	Iarray[0] = FLAG;
 	Iarray[1] = A;
 	
-	if(messageToSend == 0)
-	{
+	if(messageToSend == 0) {
 		Iarray[2] = C0;
 	}
 	else {
@@ -289,25 +295,23 @@ int llwrite(int fd, char * buffer, int length) {
 
 	int i = 0;
 	int j = 4;
+
 	//stuffing and attributing data to frame I
-	for(; i < length;i++)
-	{
-		if(buffer[i] == FLAG)
-		{
+	for(; i < length;i++) {
+
+		if(buffer[i] == FLAG) {
 			Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
 			Iarray[j] = ESCAPE;
 			Iarray[j + 1] = ESCAPE_FLAG;
 			j += 2;
 		} 
-		else if(buffer[i] == ESCAPE)
-		{
+		else if(buffer[i] == ESCAPE) {
 			Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
 			Iarray[j] = ESCAPE;
 			Iarray[j + 1] = ESCAPE_ESCAPE;
 			j += 2;
 		}
-		else
-		{
+		else {
 			Iarray[j] = buffer[i];
 			j++;
 		}
@@ -359,34 +363,32 @@ int llwrite(int fd, char * buffer, int length) {
 			}
 			else {
 				read(fd, &c, 1);
-				caughtACK(&state, &c, &ctrl);
+				checkACK(&state, &c, &ctrl);
 
-				if(state == DONE)
-				{
+				if(state == DONE) {
 					printf("ACK/NACK received \n");
 					received = TRUE;
 				}
 			}
-		 }
-		//acknolagement == ACK, envia a proxima mensagem
-		//acknolagement == NACK, envia a mesma mensagem
-		//caso alarme acione. Manda a mensagem actual
+		}
 
-		if ((*ctrl == RR1_C && messageToSend == 0) || (*ctrl == RR0_C && messageToSend == 1))
+		if( (ctrl == RR1_C && messageToSend == 0) || (ctrl == RR0_C && messageToSend == 1) )
 		{
-			if(*ctrl == RR1_C)
+			if(ctrl == RR1_C)
 				printf("RECEIVED RR1\n");
-			else printf("RECEIVED RR0\n");
+			else 
+				printf("RECEIVED RR0\n");
 
 			repeat_frame = FALSE;
 			retries = 0;
 			messageToSend ^= 1;
 		}
-		else if (*ctrl == REJ0_C || *ctrl == REJ1_C)
+		else if( ctrl == REJ0_C || ctrl == REJ1_C )
 		{
-			if(*ctrl == REJ1_C)
+			if(ctrl == REJ1_C)
 				printf("RECEIVED REJ1\n");
-			else printf("RECEIVED REJ0\n");
+			else 
+				printf("RECEIVED REJ0\n");
 
 			repeat_frame = TRUE;
 			retries = 0;
@@ -440,14 +442,45 @@ unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2)
   return BCC2Stuffed;
 }
 
+unsigned char *readFile(unsigned char *fileName, off_t *fileSize) {
+	
+	FILE *f;
+	struct stat file;
+	unsigned char *fileData;
 
+	fopen(fileName, "rb");
+
+	stat((char *) fileName, &file);
+
+	(*fileSize) = file.st_size;
+
+	fileData = (unsigned char *)malloc(*fileSize);
+
+	fread(fileData, sizeof(unsigned char), *fileSize, f);
+
+	return fileData;
+}
+
+unsigned char *makeStartFrame(off_t fileSize, unsigned char *fileName, int fileNameSize) {
+
+	int startFrameSize = 9 * sizeof(unsigned char) + fileNameSize;
+
+	unsigned char *startFrame = (unsigned char *)malloc(startFrameSize);
+
+	startFrame[0] = C_START;
+	startFrame[1] = T1;
+	
+}
 
 
 void llclose(int fd) {
+	
+	if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
+		perror("tcsetattr");
+		exit(-1);
+	}
+	
+	// TODO enviar frames finais de confirmacao
 
-  if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
-    perror("tcsetattr");
-    exit(-1);
-  }
-  close(fd);
+	close(fd);
 }
