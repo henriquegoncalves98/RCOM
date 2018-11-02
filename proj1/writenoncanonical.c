@@ -63,16 +63,22 @@ int main(int argc, char** argv)
 	unsigned char *fileName = (unsigned char *)malloc(fileNameSize);
 	fileName = "pinguim.gif";
 
-	// TODO acabar makeStartFrame
-	unsigned char *start = makeStartFrame(fileSize, fileName, fileNameSize);
+	//getting the value of the file size in a char array to minimize the bytes used from fileSize
+	char fileSizeBuf[sizeof(fileSize) + 2];
+	snprintf(fileSizeBuf, sizeof fileSizeBuf, "%ld", fileSize);
+
+	//send start frame
+	sendControlFrame(fd, C_START, fileSizeBuf, fileName);
 	
-	//envia mensagem
-	llwrite(fd, start, 2);
 
 	// TODO tratar do envio da mensagem apos a frame Start
 	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
+	
 
-	// TODO tratar do envio da frame end
+
+	//send end frame
+	sendControlFrame(fd, C_END, fileSizeBuf, fileName);
+	
 	llclose(fd);
 	return 0;
 }
@@ -446,7 +452,7 @@ unsigned char *readFile(unsigned char *fileName, off_t *fileSize) {
 	struct stat file;
 	unsigned char *fileData;
 
-	fopen(fileName, "rb");
+	f = fopen(fileName, "rb");
 
 	stat((char *) fileName, &file);
 
@@ -456,17 +462,47 @@ unsigned char *readFile(unsigned char *fileName, off_t *fileSize) {
 
 	fread(fileData, sizeof(unsigned char), *fileSize, f);
 
+	fclose(f);
+
 	return fileData;
 }
 
-unsigned char *makeStartFrame(off_t fileSize, unsigned char *fileName, int fileNameSize) {
+void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned char *fileName) {
 
-	int startFrameSize = 9 * sizeof(unsigned char) + fileNameSize;
+	if (state == C_START)
+		printf("Sending START control package.\n");
+	else if (state == C_END)
+		printf("Sending END control package.\n");
+	else
+		printf("Sending UNKNOWN control package.\n");
 
-	unsigned char *startFrame = (unsigned char *)malloc(startFrameSize);
 
-	startFrame[0] = C_START;
-	startFrame[1] = T1;
+	int controlFrameSize = 5 + strlen(fileSizeBuf) + strlen((char*)fileName);
+
+	char *controlFrame = (char *)malloc(controlFrameSize);
+	int ind = 0;
+
+	controlFrame[ind++] = state;
+	controlFrame[ind++] = T1;
+	controlFrame[ind++] = strlen(fileSizeBuf);
+	for (int i = 0; i < strlen(fileSizeBuf); i++)
+		controlFrame[ind++] = fileSizeBuf[i];
+
+	controlFrame[ind++] = T2;
+	controlFrame[ind++] = strlen((char*)fileName);
+	for (int i = 0; i < strlen((char*)fileName); i++)
+		controlFrame[ind++] = fileName[i];
+
+	//envia mensagem
+	llwrite(fd, controlFrame, controlFrameSize);
+
+	if (state == C_START)
+		printf("START control package sent.\n");
+	else if (state == C_END)
+		printf("END control package sent.\n");
+	else
+		printf("UNKNOWN control package sent.\n");
+
 	
 }
 

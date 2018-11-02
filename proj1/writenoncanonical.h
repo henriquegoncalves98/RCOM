@@ -22,7 +22,9 @@
 #define REJ1_C				0x81
 #define DISC_C				0x0B
 #define C_START             0x02
+#define C_END               0x03
 #define T1                  0x00
+#define T2                  0x01
 
 
 #define ESCAPE			    0x7D
@@ -47,6 +49,6 @@ unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2);
 
 unsigned char *readFile(unsigned char *fileName, off_t *fileSize);
 
-unsigned char *makeStartFrame(off_t fileSize, unsigned char *fileName, int fileNameSize);
+void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned char *fileName);
 
 void llclose(int fd);
