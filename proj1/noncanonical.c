@@ -35,12 +35,31 @@ int main(int argc, char** argv) {
 
 	unsigned char *startFrame;
 
-	llread(fd,startFrame);
+	llread(fd, startFrame);
 
-	// TODO processar a recepcao da mensagem
+	Message message;
+	
+	getFileInfo(startFrame, message);
+	message.fileData = (unsigned char *)malloc(strlen(message.fileSizeBuf));
+
+	int received = FALSE;
+ 
+	unsigned char *packet;
+
+	while(!received) {
+		
+		llread(fd, packet);
+
+		if( hasFinishedReceiving(packet, startFrame) )
+			received = TRUE;
+		else {
+			received = FALSE;
+			
+
+		}
 
 
-	// TODO processar a recepcao do endFrame
+	}
 
 	llclose(fd);
 	return 0;
@@ -149,7 +168,6 @@ int caughtSUFrame(int fd, unsigned char CFlag) {
 * Read from file descriptor fd and puts the data read in buffer
 * @return negative if failed or the number of characters read, basicly the sizes of buffer if there was no error
 */
-
 int llread(int fd, unsigned char * buffer) {
 
 	//TODO Quando BCC2 errado, Se se tratar dum duplicado, deve fazer-se confirmação com RR
@@ -304,6 +322,47 @@ void sendAcknowlegment(int fd, unsigned char c) {
 	ackFrame[4] = FLAG;
 
 	write(fd, ackFrame, 5);
+}
+/*
+      2  3  4  5  6  7  8  9  10 11
+ C T1 L1 V1 V2 V3 V4 V5 V6 V7 V8 T2 L2 V1 V2 V3 V4
+ A B  8                             4
+*/
+void getFileInfo(unsigned char *startFrame, Message message) {
+
+	int l1 = (int)startFrame[6];
+
+	int l2 = (int)startFrame[6 + l1 + 2];
+	unsigned char *name = (unsigned char*)malloc(l2);
+
+	for(int i=0; i<l2; i++) {
+		name[i] = startFrame[6 + l1 + 3 + i];
+	}
+
+	message.fileName = name;
+
+	
+	char *size = (char *)malloc(l1);
+
+	for(int i=0; i<l1; i++) {
+		size[i] = startFrame[7 + i];
+	}
+
+	message.fileSizeBuf = size;
+}
+
+int hasFinishedReceiving(unsigned char *packet, unsigned char *startFrame) {
+
+	if(packet[0] == C_END) {
+		for(int i=1; i<strlen(packet); i++) {
+			if( packet[i] != startFrame[i] )
+				return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 void llclose(int fd) {

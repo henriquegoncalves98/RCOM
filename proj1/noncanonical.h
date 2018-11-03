@@ -20,6 +20,8 @@
 #define REJ_C0              0x01
 #define REJ_C1              0x81 
 #define DISC_C              0x0B
+#define C_START             0x02
+#define C_END               0x03
 
 #define ESCAPE			    0x7D
 #define ESCAPE_FLAG         0x5E
@@ -27,6 +29,13 @@
 
 
 enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, ESCAPING, DONE};
+
+typedef struct {
+   unsigned char    *fileName;
+   char             *fileSizeBuf;
+   unsigned char    *fileData;
+} Message;
+
 
 void llopen(int fd);
 
@@ -37,5 +46,9 @@ int caughtSUFrame(int fd, unsigned char CFlag);
 int hasBCC2();
 
 void sendAcknowlegment(int fd, unsigned char c);
+
+void getFileInfo(unsigned char *startFrame, Message message);
+
+int hasFinishedReceiving(unsigned char *packet, unsigned char *startFrame);
 
 void llclose(int fd);
