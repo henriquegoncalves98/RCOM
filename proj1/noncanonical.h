@@ -51,4 +51,8 @@ void getFileInfo(unsigned char *startFrame, Message message);
 
 int hasFinishedReceiving(unsigned char *packet, unsigned char *startFrame);
 
+void getPacketInfo(Message message, unsigned char *packet);
+
+void makeNewFile(Message message);
+
 void llclose(int fd);

@@ -55,11 +55,11 @@ int main(int argc, char** argv) {
 		else {
 			received = FALSE;
 			
-
+			getPacketInfo(message, packet);
 		}
-
-
 	}
+
+	makeNewFile(message);
 
 	llclose(fd);
 	return 0;
@@ -353,8 +353,8 @@ void getFileInfo(unsigned char *startFrame, Message message) {
 
 int hasFinishedReceiving(unsigned char *packet, unsigned char *startFrame) {
 
-	if(packet[0] == C_END) {
-		for(int i=1; i<strlen(packet); i++) {
+	if(packet[4] == C_END) {
+		for(int i=4; i<strlen(packet); i++) {
 			if( packet[i] != startFrame[i] )
 				return FALSE;
 		}
@@ -363,6 +363,27 @@ int hasFinishedReceiving(unsigned char *packet, unsigned char *startFrame) {
 	}
 
 	return FALSE;
+}
+
+void getPacketInfo(Message message, unsigned char *packet) {
+
+	unsigned char *fileData = (unsigned char *)malloc(strlen(packet) - 4);
+
+	for(int i=4, j=0; i<(strlen(packet)-4); i++, j++) {
+		fileData[j] = packet[i];
+	}
+
+	memcpy(message.fileData + strlen(message.fileData), fileData, strlen(fileData));
+}
+
+void makeNewFile(Message message) {
+	FILE *f;
+
+	f = fopen((char *)message.fileName, "wb+");
+
+	fwrite((void *)message.fileData, message.fileData[0]/sizeof(unsigned char), strlen(message.fileSizeBuf), f);
+
+	fclose(f);
 }
 
 void llclose(int fd) {
