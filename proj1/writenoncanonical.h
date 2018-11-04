@@ -21,6 +21,7 @@
 #define REJ0_C				0x01
 #define REJ1_C				0x81
 #define DISC_C				0x0B
+#define C_DATA              0x01
 #define C_START             0x02
 #define C_END               0x03
 #define T1                  0x00
@@ -50,5 +51,17 @@ unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2);
 unsigned char *readFile(unsigned char *fileName, off_t *fileSize);
 
 void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned char *fileName);
+
+/*
+* Splits the message from the file selected in packets.
+* Application layer
+*/
+unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDataPacket, off_t FileSize);
+
+/*
+* It appends the packet header to the begginning of data packets
+* Application layer
+*/
+char *packetHeader(unsigned char *message, int *sizeDataPacket, off_t FileSize);
 
 void llclose(int fd);

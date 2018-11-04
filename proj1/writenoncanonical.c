@@ -17,6 +17,8 @@ int NUM_RETRIES = 3;
 int resend = FALSE;
 int received = FALSE;
 int messageToSend = 0;
+int bytesForEachPacket = 100;
+int numTotalPackets = 0;
 
 
 static void alarmHandler(int sig)
@@ -32,6 +34,7 @@ int main(int argc, char** argv)
 {
 	int fd;
 	off_t fileSize;
+	off_t indice = 0;
 
 	
 	//PORT CONFIGURATION AND OPENING PORTS
@@ -70,9 +73,26 @@ int main(int argc, char** argv)
 	//send start frame
 	sendControlFrame(fd, C_START, fileSizeBuf, fileName);
 	
-
-	// TODO tratar do envio da mensagem apos a frame Start
+	int sizeDP = bytesForEachPacket;
+	
 	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
+	 while (indice < fileSize)
+	{
+		//cut the message in the bytesForEachPacket
+		unsigned char *data_packet = cutMessage(message, &indice, &sizeDP, fileSize);
+		printf("Sent packet nr %d\n", numTotalPackets);
+		
+		//packet header
+		int headerSize = sizeDP;
+		char *final_data_packet = packetHeader(data_packet, &headerSize, sizeFile);
+		
+		//sends the data packet
+		if (!llwrite(fd, final_data_packet, headerSize))
+		{
+			printf("Error in llwrite\n");
+			return -1;
+		}
+	}
 	
 
 
@@ -82,7 +102,6 @@ int main(int argc, char** argv)
 	llclose(fd);
 	return 0;
 }
-
 
 
 int llopen(int fd)
@@ -341,11 +360,12 @@ int llwrite(int fd, char * buffer, int length) {
 	received = FALSE;
 
 	int repeat_frame = TRUE;
+	ssize_t bytesW;
 
 	//send I message now
 	do
 	{
-		write(fd, Iarray, IarraySize);
+		bytesW = write(fd, Iarray, IarraySize);
 
 		//ativa alarme
 		alarm(timeout);
@@ -359,7 +379,7 @@ int llwrite(int fd, char * buffer, int length) {
 		while( !received && (retries != NUM_RETRIES) ) {
 
 			if( resend ) { 
-				write(fd, Iarray, IarraySize);
+				bytesW = write(fd, Iarray, IarraySize);
 				alarm(timeout);
 				resend = FALSE;
 				state = START;
@@ -403,10 +423,10 @@ int llwrite(int fd, char * buffer, int length) {
 	} while(repeat_frame);
 
 
-	if (retries >= NUM_RETRIES)
+	if (retries >= NUM_RETRIES || bytesW <= 0)
 		return FALSE;
 	else
-		return TRUE;
+		return bytesW;
 }
 
 
@@ -494,7 +514,11 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 		controlFrame[ind++] = fileName[i];
 
 	//envia mensagem
-	llwrite(fd, controlFrame, controlFrameSize);
+	if(!llwrite(fd, controlFrame, controlFrameSize))
+	{
+		printf("Error in llwrite\n");
+		exit(-1);
+	}
 
 	if (state == C_START)
 		printf("START control package sent.\n");
@@ -504,6 +528,39 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 		printf("UNKNOWN control package sent.\n");
 
 	
+}
+
+char *packetHeader(unsigned char *message, int *sizeDP, off_t fileSize)
+{
+	*sizeDP += 4;
+	char * finalPacket = (char *)malloc(*sizeDP);
+	//packet header
+	finalPacket[0] = C_DATA;
+	finalPacket[1] = numTotalPackets % 255;
+	finalPacket[2] = (int)fileSize / 256;
+	finalPacket[3] = (int)fileSize % 256;
+	//now we need to concatenate the header with the body of the final packet
+	finalPacket = strcat(finalPacket , (char *)message);
+
+	numTotalPackets++;
+	return finalPacket;
+}
+
+unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDP, off_t fileSize)
+{
+
+	if((*indice + *sizeDP) > fileSize)
+	{
+		*sizeDP = fileSize - *indice;
+	}
+
+	unsigned char * packet = (unsigned char *)malloc(*sizeDP);
+	for(int i = 0; i < *sizeDP; i++, *indice++)
+	{
+		packet[i] = message[*indice];
+	}
+
+	return packet;
 }
 
 
