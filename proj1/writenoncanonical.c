@@ -69,7 +69,6 @@ int main(int argc, char** argv)
 	//getting the value of the file size in a char array to minimize the bytes used from fileSize
 	char fileSizeBuf[sizeof(fileSize) + 2];
 	snprintf(fileSizeBuf, sizeof fileSizeBuf, "%ld", fileSize);
-
 	//send start frame
 	sendControlFrame(fd, C_START, fileSizeBuf, fileName);
 	
@@ -417,10 +416,6 @@ int llwrite(int fd, char * buffer, int length) {
 	Iarray[j] = FLAG;
 
 
-	//reset time out parameters
-	retries = 0;
-	resend = FALSE;
-	received = FALSE;
 
 	int repeat_frame = TRUE;
 	ssize_t bytesW;
@@ -428,6 +423,12 @@ int llwrite(int fd, char * buffer, int length) {
 	//send I message now
 	do
 	{
+		//reset time out parameters
+		retries = 0;
+		resend = FALSE;
+		received = FALSE;
+
+
 		bytesW = write(fd, Iarray, IarraySize);
 
 		//ativa alarme
