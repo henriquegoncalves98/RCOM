@@ -468,7 +468,7 @@ int llwrite(int fd, char * buffer, int length) {
 			repeat_frame = FALSE;
 			retries = 0;
 			messageToSend ^= 1;
-			alarm(timeout);
+			alarm(0);
 		}
 		else if( ctrl == REJ0_C || ctrl == REJ1_C )
 		{
@@ -479,7 +479,7 @@ int llwrite(int fd, char * buffer, int length) {
 
 			repeat_frame = TRUE;
 			retries = 0;
-			alarm(timeout);
+			alarm(0);
 		}
 
 	} while(repeat_frame);
@@ -559,9 +559,9 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 		printf("Sending UNKNOWN control package.\n");
 
 
-	int controlFrameSize = 5 + strlen(fileSizeBuf) + strlen((char*)fileName);
+	int controlFrameSize = 5 + strlen(fileSizeBuf) + strlen(fileName);
 
-	char *controlFrame = (char *)malloc(controlFrameSize);
+	unsigned char *controlFrame = (unsigned char *)malloc(controlFrameSize);
 	int ind = 0;
 	controlFrame[ind++] = state;
 	controlFrame[ind++] = T1;
@@ -570,8 +570,8 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 		controlFrame[ind++] = fileSizeBuf[i];
 
 	controlFrame[ind++] = T2;
-	controlFrame[ind++] = strlen((char*)fileName);
-	for (int i = 0; i < strlen((char*)fileName); i++)
+	controlFrame[ind++] = strlen(fileName);
+	for (int i = 0; i < strlen(fileName); i++)
 		controlFrame[ind++] = fileName[i];
 
 

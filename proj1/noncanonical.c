@@ -44,19 +44,19 @@ int main(int argc, char** argv) {
 	message.fileData = (unsigned char *)malloc(message.fileSizeBufLength);
 
 
-	int received = FALSE;
+	int received2 = FALSE;
  
 	unsigned char *packet;
 	int packetSize;
 
-	while(!received) {
+	while(!received2) {
 		
 		packetSize = llread(fd, packet);
 
 		if( hasFinishedReceiving(packet, packetSize, startFrame, startFrameSize) )
-			received = TRUE;
+			received2 = TRUE;
 		else {
-			received = FALSE;
+			received2 = FALSE;
 			
 			getPacketInfo(message, packet, packetSize);
 		}
@@ -336,7 +336,7 @@ void getFileInfo(unsigned char *startFrame, int startFrameSize, Message message)
 	message.fileNameLength = l2;
 
 	
-	char *size = (char *)malloc(l1);
+	unsigned char *size = (unsigned char *)malloc(l1);
 
 	for(int i=0; i<l1; i++) {
 		size[i] = startFrame[3 + i];

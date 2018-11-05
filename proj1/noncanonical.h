@@ -33,7 +33,7 @@ enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, ESCAPING, DONE};
 typedef struct {
    unsigned char    *fileName;
    int              fileNameLength;
-   char             *fileSizeBuf;
+   unsigned char    *fileSizeBuf;
    int              fileSizeBufLength;
    unsigned char    *fileData;
 } Message;
