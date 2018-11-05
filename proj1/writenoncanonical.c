@@ -84,7 +84,7 @@ int main(int argc, char** argv)
 		
 		//packet header
 		int headerSize = sizeDP;
-		char *final_data_packet = packetHeader(data_packet, &headerSize, sizeFile);
+		char *final_data_packet = packetHeader(data_packet, &headerSize, fileSize);
 		
 		//sends the data packet
 		if (!llwrite(fd, final_data_packet, headerSize))
@@ -137,7 +137,8 @@ int llopen(int fd)
 
 
 
-	sendSET(fd);
+	sendSUFrame(fd, SET_C);
+	printf("SET frame sent \n");
 
 	alarm(timeout);
 
@@ -148,7 +149,7 @@ int llopen(int fd)
 	while( !received && (retries != NUM_RETRIES) ) {
 
 		if( resend ) { 
-			sendSET(fd);
+			sendSUFrame(fd, SET_C);
 			alarm(timeout);
 			resend = FALSE;
 			state = START;
@@ -173,18 +174,79 @@ int llopen(int fd)
 	return 1;
 }
 
-void sendSET(int fd) {
+void sendSUFrame(int fd, unsigned char c) {
 
-	char SETarray[5];
-	SETarray[0] = FLAG;
-	SETarray[1] = A;
-	SETarray[2] = SET_C;
-	SETarray[3] = SET_BCC1;
-	SETarray[4] = FLAG;
+	char frame[5];
+	frame[0] = FLAG;
+	frame[1] = A;
+	frame[2] = c;
+	frame[3] = frame[1]^frame[2];
+	frame[4] = FLAG;
 
-	size_t SETarraySize = sizeof(SETarray)/sizeof(SETarray[0]);
+	size_t frameSize = sizeof(frame)/sizeof(frame[0]);
 
-	write(fd, SETarray, SETarraySize); 
+	write(fd, frame, frameSize); 
+}
+
+int caughtSUFrame(int fd, unsigned char CFlag) {
+
+	unsigned char c;
+	enum state_machine state = START;
+
+	while(state != DONE) {
+
+		read(fd, &c, 1);
+
+		switch(state) {
+			case(START):
+				if(c == FLAG)
+					state = FLAG_RCV;
+				break;
+
+			case(FLAG_RCV):
+				if(c == A)
+					state = A_RCV;
+				else {
+					if(c == FLAG)
+						break;
+					else
+						state = START;
+				}
+				break;
+
+			case(A_RCV):
+				if(c == CFlag)
+					state = C_RCV;
+				else {
+					if(c == FLAG)
+						state = FLAG_RCV;
+					else
+						state = START;
+				}
+				break;
+
+			case(C_RCV):
+				if(c == SET_BCC1)
+					state=BCC1_RCV;
+				else {
+					if(c == FLAG)
+						state = FLAG_RCV;
+					else
+						state=START;
+				}
+				break;
+
+			case(BCC1_RCV):
+				if(c == FLAG)
+					state = DONE;
+				else
+					state = START;
+
+				break;
+		}
+	}
+
+	return TRUE;
 }
 
 void caughtUA(enum state_machine *state, unsigned char *c) {
@@ -354,6 +416,7 @@ int llwrite(int fd, char * buffer, int length) {
 
 	Iarray[j] = FLAG;
 
+
 	//reset time out parameters
 	retries = 0;
 	resend = FALSE;
@@ -405,7 +468,7 @@ int llwrite(int fd, char * buffer, int length) {
 			repeat_frame = FALSE;
 			retries = 0;
 			messageToSend ^= 1;
-			alarm(0);
+			alarm(timeout);
 		}
 		else if( ctrl == REJ0_C || ctrl == REJ1_C )
 		{
@@ -416,8 +479,7 @@ int llwrite(int fd, char * buffer, int length) {
 
 			repeat_frame = TRUE;
 			retries = 0;
-			alarm(0);
-		
+			alarm(timeout);
 		}
 
 	} while(repeat_frame);
@@ -501,7 +563,6 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 
 	char *controlFrame = (char *)malloc(controlFrameSize);
 	int ind = 0;
-
 	controlFrame[ind++] = state;
 	controlFrame[ind++] = T1;
 	controlFrame[ind++] = strlen(fileSizeBuf);
@@ -512,6 +573,7 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 	controlFrame[ind++] = strlen((char*)fileName);
 	for (int i = 0; i < strlen((char*)fileName); i++)
 		controlFrame[ind++] = fileName[i];
+
 
 	//envia mensagem
 	if(!llwrite(fd, controlFrame, controlFrameSize))
@@ -571,7 +633,15 @@ void llclose(int fd) {
 		exit(-1);
 	}
 	
-	// TODO enviar frames finais de confirmacao
+
+	sendSUFrame(fd, DISC_C);
+	printf("DISC frame sent \n");
+
+	caughtSUFrame(fd, DISC_C);
+	printf("DISC frame caught \n");
+
+	sendSUFrame(fd, UA_C);
+	printf("UA frame sent \n");
 
 	close(fd);
 }
