@@ -240,6 +240,9 @@ int llread(int fd, unsigned char * buffer) {
 						state = DONE;
 					}
 					else {
+						if( (frameNumber == 0 && messageToReceive == 1) || (frameNumber == 1 && messageToReceive == 0))
+							sendAcknowlegment(fd, RR_C1);
+							
 						if( frameNumber == 0)
 							sendAcknowlegment(fd, REJ_C0);
 						else

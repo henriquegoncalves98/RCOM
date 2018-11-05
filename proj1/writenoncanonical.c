@@ -36,10 +36,10 @@ int main(int argc, char** argv)
 	off_t fileSize;
 	off_t indice = 0;
 
-	
+
 	//PORT CONFIGURATION AND OPENING PORTS
-	if ( (argc < 2) || 
-	  ((strcmp("/dev/ttyS0", argv[1])!=0) && 
+	if ( (argc < 2) ||
+	  ((strcmp("/dev/ttyS0", argv[1])!=0) &&
 		(strcmp("/dev/ttyS1", argv[1])!=0) )) {
 		printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
 		exit(1);
@@ -47,10 +47,10 @@ int main(int argc, char** argv)
 
 	fd = open(argv[1], O_RDWR | O_NOCTTY );
 	if (fd <0) {
-		perror(argv[1]); exit(-1); 
+		perror(argv[1]); exit(-1);
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
-	
+
 
 	(void) signal(SIGALRM, alarmHandler);
 
@@ -58,7 +58,7 @@ int main(int argc, char** argv)
 		printf("Failed to make a connection to the receiver \n");
 		return -1;
 	}
-	
+
 	// TODO mudar nome do ficheiro para argumento do main
 	unsigned char *message = readFile("pinguim.gif", &fileSize);
 
@@ -67,24 +67,24 @@ int main(int argc, char** argv)
 	fileName = "pinguim.gif";
 
 	//getting the value of the file size in a char array to minimize the bytes used from fileSize
-	char fileSizeBuf[sizeof(fileSize) + 2];
+	unsigned char fileSizeBuf[sizeof(fileSize) + 2];
 	snprintf(fileSizeBuf, sizeof fileSizeBuf, "%ld", fileSize);
 	//send start frame
 	sendControlFrame(fd, C_START, fileSizeBuf, fileName);
-	
+
 	int sizeDP = bytesForEachPacket;
-	
+
 	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
 	 while (indice < fileSize)
 	{
 		//cut the message in the bytesForEachPacket
 		unsigned char *data_packet = cutMessage(message, &indice, &sizeDP, fileSize);
 		printf("Sent packet nr %d\n", numTotalPackets);
-		
+
 		//packet header
 		int headerSize = sizeDP;
 		char *final_data_packet = packetHeader(data_packet, &headerSize, fileSize);
-		
+
 		//sends the data packet
 		if (!llwrite(fd, final_data_packet, headerSize))
 		{
@@ -92,12 +92,12 @@ int main(int argc, char** argv)
 			return -1;
 		}
 	}
-	
+
 
 
 	//send end frame
 	sendControlFrame(fd, C_END, fileSizeBuf, fileName);
-	
+
 	llclose(fd);
 	return 0;
 }
@@ -105,12 +105,12 @@ int main(int argc, char** argv)
 
 int llopen(int fd)
 {
-	
-	if ( tcgetattr(fd,&oldtio) == -1) { // save current port settings 
+
+	if ( tcgetattr(fd,&oldtio) == -1) { // save current port settings
 		perror("tcgetattr");
 		exit(-1);
 	}
-	
+
 
 	bzero(&newtio, sizeof(newtio));
 	newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
@@ -123,14 +123,14 @@ int llopen(int fd)
 	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 1 char received */
 
-	
+
 	tcflush(fd, TCIOFLUSH);
 
 	if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
-	
+
 
 	printf("New termios structure set\n");
 
@@ -144,10 +144,10 @@ int llopen(int fd)
 
 	enum state_machine state = START;
 	unsigned char c;
-	
+
 	while( !received && (retries != NUM_RETRIES) ) {
 
-		if( resend ) { 
+		if( resend ) {
 			sendSUFrame(fd, SET_C);
 			alarm(timeout);
 			resend = FALSE;
@@ -184,7 +184,7 @@ void sendSUFrame(int fd, unsigned char c) {
 
 	size_t frameSize = sizeof(frame)/sizeof(frame[0]);
 
-	write(fd, frame, frameSize); 
+	write(fd, frame, frameSize);
 }
 
 int caughtSUFrame(int fd, unsigned char CFlag) {
@@ -255,7 +255,7 @@ void caughtUA(enum state_machine *state, unsigned char *c) {
 			if(*c == FLAG)
 				*state = FLAG_RCV;
 			break;
-		
+
 		case(FLAG_RCV):
 			if(*c == A)
 				*state = A_RCV;
@@ -277,7 +277,7 @@ void caughtUA(enum state_machine *state, unsigned char *c) {
 					*state = START;
 			}
 			break;
-		
+
 		case(C_RCV):
 			if(*c == UA_BCC1)
 				*state = BCC1_RCV;
@@ -293,11 +293,11 @@ void caughtUA(enum state_machine *state, unsigned char *c) {
 			if(*c == FLAG)
 				*state = DONE;
 			else
-				*state = START;	
+				*state = START;
 
 			break;
 	}
-	
+
 }
 
 void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) {
@@ -307,7 +307,7 @@ void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) 
 			if(*c == FLAG)
 				*state = FLAG_RCV;
 			break;
-	
+
 		case(FLAG_RCV):
 			if(*c == A)
 				*state = A_RCV;
@@ -332,7 +332,7 @@ void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) 
 					*state = START;
 			}
 			break;
-	
+
 		case(C_RCV):
 			if(*c == (A ^ *ctrl))
 				*state = BCC1_RCV;
@@ -347,7 +347,7 @@ void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) 
 				*state = DONE;
 			}
 			else
-				*state = START;	
+				*state = START;
 
 			break;
 	}
@@ -366,7 +366,7 @@ int llwrite(int fd, char * buffer, int length) {
 
 	Iarray[0] = FLAG;
 	Iarray[1] = A;
-	
+
 	if(messageToSend == 0) {
 		Iarray[2] = C0;
 	}
@@ -383,12 +383,14 @@ int llwrite(int fd, char * buffer, int length) {
 	for(; i < length;i++) {
 
 		if(buffer[i] == FLAG) {
+      printf("386\n");
 			Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
 			Iarray[j] = ESCAPE;
 			Iarray[j + 1] = ESCAPE_FLAG;
 			j += 2;
-		} 
+		}
 		else if(buffer[i] == ESCAPE) {
+      printf("393\n");
 			Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
 			Iarray[j] = ESCAPE;
 			Iarray[j + 1] = ESCAPE_ESCAPE;
@@ -407,6 +409,7 @@ int llwrite(int fd, char * buffer, int length) {
 	}
 	else
 	{
+    printf("412\n");
 		Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
 		Iarray[j] = BCC2Stuffed[0];
 		Iarray[j+1] = BCC2Stuffed[1];
@@ -428,6 +431,8 @@ int llwrite(int fd, char * buffer, int length) {
 		resend = FALSE;
 		received = FALSE;
 
+		for(int i = 0; i < IarraySize;i++)
+			printf("%x ", Iarray[i]);
 
 		bytesW = write(fd, Iarray, IarraySize);
 
@@ -442,7 +447,7 @@ int llwrite(int fd, char * buffer, int length) {
 
 		while( !received && (retries != NUM_RETRIES) ) {
 
-			if( resend ) { 
+			if( resend ) {
 				bytesW = write(fd, Iarray, IarraySize);
 				alarm(timeout);
 				resend = FALSE;
@@ -463,7 +468,7 @@ int llwrite(int fd, char * buffer, int length) {
 		{
 			if(ctrl == RR1_C)
 				printf("RECEIVED RR1\n");
-			else 
+			else
 				printf("RECEIVED RR0\n");
 
 			repeat_frame = FALSE;
@@ -475,7 +480,7 @@ int llwrite(int fd, char * buffer, int length) {
 		{
 			if(ctrl == REJ1_C)
 				printf("RECEIVED REJ1\n");
-			else 
+			else
 				printf("RECEIVED REJ0\n");
 
 			repeat_frame = TRUE;
@@ -530,7 +535,7 @@ unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2)
 }
 
 unsigned char *readFile(unsigned char *fileName, off_t *fileSize) {
-	
+
 	FILE *f;
 	struct stat file;
 	unsigned char *fileData;
@@ -561,6 +566,7 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 
 
 	int controlFrameSize = 5 + strlen(fileSizeBuf) + strlen(fileName);
+	printf("566- %d ",controlFrameSize);
 
 	unsigned char *controlFrame = (unsigned char *)malloc(controlFrameSize);
 	int ind = 0;
@@ -574,6 +580,12 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 	controlFrame[ind++] = strlen(fileName);
 	for (int i = 0; i < strlen(fileName); i++)
 		controlFrame[ind++] = fileName[i];
+
+printf("581 - ");
+	for(int i = 0;i < controlFrameSize;i++)
+		printf("%x ",controlFrame[i]);
+
+	printf("\n");
 
 
 	//envia mensagem
@@ -590,7 +602,7 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 	else
 		printf("UNKNOWN control package sent.\n");
 
-	
+
 }
 
 char *packetHeader(unsigned char *message, int *sizeDP, off_t fileSize)
@@ -618,7 +630,8 @@ unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDP, of
 	}
 
 	unsigned char * packet = (unsigned char *)malloc(*sizeDP);
-	for(int i = 0; i < *sizeDP; i++, *indice++)
+
+	for(int i = 0; i < *sizeDP; i++, (*indice)++)
 	{
 		packet[i] = message[*indice];
 	}
@@ -628,12 +641,12 @@ unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDP, of
 
 
 void llclose(int fd) {
-	
+
 	if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
-	
+
 
 	sendSUFrame(fd, DISC_C);
 	printf("DISC frame sent \n");
