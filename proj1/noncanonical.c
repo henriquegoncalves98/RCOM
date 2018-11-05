@@ -35,8 +35,10 @@ int main(int argc, char** argv) {
 
 	unsigned char *startFrame;
 	int startFrameSize;
-
-	startFrameSize = llread(fd, startFrame);
+	
+	do {
+		startFrameSize = llread(fd, startFrame);
+	}while(startFrameSize == -1);
 
 	Message message;
 	
@@ -51,7 +53,9 @@ int main(int argc, char** argv) {
 
 	while(!received2) {
 		
-		packetSize = llread(fd, packet);
+		do {
+			packetSize = llread(fd, packet);
+		}while(packetSize == -1);
 
 		if( hasFinishedReceiving(packet, packetSize, startFrame, startFrameSize) )
 			received2 = TRUE;
@@ -84,7 +88,7 @@ void llopen(int fd) {
 	/* set input mode (non-canonical, no echo,...) */
 	newtio.c_lflag = 0;
 
-	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
+	newtio.c_cc[VTIME]    = 1;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
 
 	
@@ -181,6 +185,9 @@ int llread(int fd, unsigned char * buffer) {
 	unsigned char C_Flag;
 	int frameNumber = 0;
 
+	int frame_repeat = FALSE;
+
+
 	while(state != DONE) {
 
 		read(fd, &c, 1);
@@ -240,16 +247,13 @@ int llread(int fd, unsigned char * buffer) {
 						state = DONE;
 					}
 					else {
-						if( (frameNumber == 0 && messageToReceive == 1) || (frameNumber == 1 && messageToReceive == 0))
-							sendAcknowlegment(fd, RR_C1);
-							
 						if( frameNumber == 0)
 							sendAcknowlegment(fd, REJ_C0);
 						else
 							sendAcknowlegment(fd, REJ_C1);
 
 						state = DONE;
-						sizeBuffer = -1;
+						frame_repeat = TRUE;
 					}
 				}
 				else if(c == ESCAPE) 
@@ -282,6 +286,15 @@ int llread(int fd, unsigned char * buffer) {
 				break;
 		}
 	}
+	
+	if(frame_repeat)
+		return -1;
+	
+	int l;
+	for(l=0; l<sizeBuffer; l++) {
+		printf("%x ", buffer[l]);
+	}	
+
 
 	printf("Frame size: %d\n", sizeBuffer);
 	//frame tem BCC2 no fim
@@ -330,8 +343,8 @@ void getFileInfo(unsigned char *startFrame, int startFrameSize, Message message)
 
 	int l2 = (int)startFrame[2 + l1 + 2];
 	unsigned char *name = (unsigned char*)malloc(l2);
-
-	for(int i=0; i<l2; i++) {
+	int i;
+	for(i=0; i<l2; i++) {
 		name[i] = startFrame[2 + l1 + 3 + i];
 	}
 	message.fileName = (unsigned char*)malloc(l2);
@@ -341,7 +354,7 @@ void getFileInfo(unsigned char *startFrame, int startFrameSize, Message message)
 	
 	unsigned char *size = (unsigned char *)malloc(l1);
 
-	for(int i=0; i<l1; i++) {
+	for(i=0; i<l1; i++) {
 		size[i] = startFrame[3 + i];
 	}
 	message.fileSizeBuf = (unsigned char*)malloc(l1);
@@ -350,9 +363,9 @@ void getFileInfo(unsigned char *startFrame, int startFrameSize, Message message)
 }
 
 int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *startFrame, int startFrameSize) {
-
+	int i;
 	if(packet[0] == C_END) {
-		for(int i=1; i<packetSize; i++) {
+		for(i=1; i<packetSize; i++) {
 			if( packet[i] != startFrame[i] )
 				return FALSE;
 		}
@@ -366,8 +379,8 @@ int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *s
 void getPacketInfo(Message message, unsigned char *packet, int packetSize) {
 
 	unsigned char *fileData = (unsigned char *)malloc(packetSize - 4);
-
-	for(int i=4, j=0; i<(packetSize-4); i++, j++) {
+	int i, j;
+	for(i=4, j=0; i<(packetSize-4); i++, j++) {
 		fileData[j] = packet[i];
 	}
 
