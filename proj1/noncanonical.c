@@ -40,19 +40,18 @@ int main(int argc, char** argv) {
 		startFrameSize = llread(fd, startFrame);
 	}while(startFrameSize == -1);
 
-	Message message;
-	
-	getFileInfo(startFrame, startFrameSize, message);
-	message.fileData = (unsigned char *)malloc(message.fileSizeBufLength);
 
+	Message message;
+
+	getFileInfo(startFrame, startFrameSize, &message);
+	message.fileData = (unsigned char *)malloc(atoi((const char *)message.fileSizeBuf));
 
 	int received2 = FALSE;
- 
-	unsigned char *packet;
+	unsigned char *packet = (unsigned char *)malloc(0);
 	int packetSize;
 
 	while(!received2) {
-		
+
 		do {
 			packetSize = llread(fd, packet);
 		}while(packetSize == -1);
@@ -61,13 +60,16 @@ int main(int argc, char** argv) {
 			received2 = TRUE;
 		else {
 			received2 = FALSE;
-			
-			getPacketInfo(message, packet, packetSize);
+			getPacketInfo(&message, packet, packetSize);
 		}
 	}
 
 	makeNewFile(message);
 
+	free(packet);
+	free(message.fileData);
+	free(message.fileSizeBuf);
+	free(message.fileName);
 	llclose(fd);
 	return 0;
 }
@@ -178,8 +180,8 @@ int caughtSUFrame(int fd, unsigned char CFlag) {
 int llread(int fd, unsigned char * buffer) {
 
 	//TODO Quando BCC2 errado, Se se tratar dum duplicado, deve fazer-se confirmação com RR
-	buffer = (unsigned char *)malloc(0);
-	int sizeBuffer = 0;
+	unsigned char* otherBuff = (unsigned char*)malloc(0);
+	int otherBuffSize = 0;
 	unsigned char c;
 	enum state_machine state = START;
 	unsigned char C_Flag;
@@ -238,7 +240,7 @@ int llread(int fd, unsigned char * buffer) {
 
 			case(BCC1_RCV):
 				if(c == FLAG) {
-					if( hasBCC2(buffer, sizeBuffer) ) {
+					if( hasBCC2(otherBuff, otherBuffSize) ) {
 						if( frameNumber == 0)
 							sendAcknowlegment(fd, RR_C1);
 						else
@@ -260,8 +262,8 @@ int llread(int fd, unsigned char * buffer) {
 					state = ESCAPING;
 
 				else {
-					buffer = (unsigned char *)realloc(buffer, ++sizeBuffer);
-       				buffer[sizeBuffer - 1] = c;
+					otherBuff = (unsigned char *)realloc(otherBuff, ++otherBuffSize);
+       				otherBuff[otherBuffSize - 1] = c;
 				}
 
 				break;
@@ -269,13 +271,13 @@ int llread(int fd, unsigned char * buffer) {
 			case(ESCAPING):
 				if( c == ESCAPE_FLAG )
 				{
-						buffer = (unsigned char *)realloc(buffer, ++sizeBuffer);
-						buffer[sizeBuffer - 1] = FLAG;
+					otherBuff = (unsigned char *)realloc(otherBuff, ++otherBuffSize);
+					otherBuff[otherBuffSize - 1] = FLAG;
 				}
 				else if(c == ESCAPE_ESCAPE){
 
-						buffer = (unsigned char *)realloc(buffer, ++sizeBuffer);
-       					buffer[sizeBuffer - 1] = ESCAPE;
+					otherBuff = (unsigned char *)realloc(otherBuff, ++otherBuffSize);
+       				otherBuff[otherBuffSize - 1] = ESCAPE;
 				}
 				else{
 
@@ -290,26 +292,34 @@ int llread(int fd, unsigned char * buffer) {
 	if(frame_repeat)
 		return -1;
 	
-	int l;
-	for(l=0; l<sizeBuffer; l++) {
-		printf("%x ", buffer[l]);
-	}	
 
 
-	printf("Frame size: %d\n", sizeBuffer);
+	printf("Frame size: %d\n", otherBuffSize);
 	//frame tem BCC2 no fim
-	buffer = (unsigned char *)realloc(buffer, --sizeBuffer);
+	buffer = (unsigned char *)realloc(otherBuff, --otherBuffSize);
 
-	if (sizeBuffer > 0)
+	if (otherBuffSize > 0)
 	{
 		if (frameNumber == messageToReceive)
 		{
 			messageToReceive ^= 1;
 		}
 		else
-			sizeBuffer = -1;
+			otherBuffSize = -1;
 	}
-	return sizeBuffer;
+
+	int l;
+	for(l=0; l<otherBuffSize; l++) {
+		printf("%x ", otherBuff[l]);
+	}	
+
+	printf("\n\n");
+	
+	memcpy(buffer, otherBuff, otherBuffSize);
+
+	free(otherBuff);
+	
+	return otherBuffSize;
 }
 
 int hasBCC2(unsigned char *buffer, int sizebuffer) {
@@ -338,7 +348,7 @@ void sendAcknowlegment(int fd, unsigned char c) {
 	write(fd, ackFrame, 5);
 }
 
-void getFileInfo(unsigned char *startFrame, int startFrameSize, Message message) {
+void getFileInfo(unsigned char *startFrame, int startFrameSize, Message *message) {
 	int l1 = (int)startFrame[2];
 
 	int l2 = (int)startFrame[2 + l1 + 2];
@@ -347,9 +357,10 @@ void getFileInfo(unsigned char *startFrame, int startFrameSize, Message message)
 	for(i=0; i<l2; i++) {
 		name[i] = startFrame[2 + l1 + 3 + i];
 	}
-	message.fileName = (unsigned char*)malloc(l2);
-	memcpy(message.fileName, name, l2);
-	message.fileNameLength = l2;
+	
+	(*message).fileName = (unsigned char*)malloc(l2);
+	memcpy((*message).fileName, name, l2);
+	(*message).fileNameLength = l2;
 
 	
 	unsigned char *size = (unsigned char *)malloc(l1);
@@ -357,9 +368,13 @@ void getFileInfo(unsigned char *startFrame, int startFrameSize, Message message)
 	for(i=0; i<l1; i++) {
 		size[i] = startFrame[3 + i];
 	}
-	message.fileSizeBuf = (unsigned char*)malloc(l1);
-	memcpy(message.fileSizeBuf, size, l1);
-	message.fileSizeBufLength = l1;
+	(*message).fileSizeBuf = (unsigned char*)malloc(l1);
+	memcpy((*message).fileSizeBuf, size, l1);
+	(*message).fileSizeBufLength = l1;
+
+	free(name);
+	free(size);
+
 }
 
 int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *startFrame, int startFrameSize) {
@@ -376,7 +391,7 @@ int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *s
 	return FALSE;
 }
 
-void getPacketInfo(Message message, unsigned char *packet, int packetSize) {
+void getPacketInfo(Message *message, unsigned char *packet, int packetSize) {
 
 	unsigned char *fileData = (unsigned char *)malloc(packetSize - 4);
 	int i, j;
@@ -384,7 +399,10 @@ void getPacketInfo(Message message, unsigned char *packet, int packetSize) {
 		fileData[j] = packet[i];
 	}
 
-	memcpy(message.fileData + strlen(message.fileData), fileData, strlen(fileData));
+	
+	memcpy((*message).fileData + strlen((*message).fileData), fileData, strlen(fileData));
+
+	free(fileData);
 }
 
 void makeNewFile(Message message) {

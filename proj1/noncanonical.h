@@ -49,11 +49,11 @@ int hasBCC2();
 
 void sendAcknowlegment(int fd, unsigned char c);
 
-void getFileInfo(unsigned char *startFrame, int startFrameSize, Message message);
+void getFileInfo(unsigned char *startFrame, int startFrameSize, Message *message);
 
 int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *startFrame, int startFrameSize);
 
-void getPacketInfo(Message message, unsigned char *packet, int packetSize);
+void getPacketInfo(Message *message, unsigned char *packet, int packetSize);
 
 void makeNewFile(Message message);
 
