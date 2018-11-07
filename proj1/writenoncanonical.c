@@ -36,14 +36,16 @@ int main(int argc, char** argv)
 	off_t fileSize;
 	off_t indice = 0;
 
-
-	//PORT CONFIGURATION AND OPENING PORTS
-	if ( (argc < 2) ||
-	  ((strcmp("/dev/ttyS0", argv[1])!=0) &&
-		(strcmp("/dev/ttyS1", argv[1])!=0) )) {
-		printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
-		exit(1);
-	}
+  if(argc < 3) {
+    printf("Invalid number of arguments! \n");
+    exit(1);
+  }
+  else {
+    if( (strcmp("/dev/ttyS0", argv[1])!=0) && (strcmp("/dev/ttyS1", argv[1])!=0) ) {
+      printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+      exit(1);
+    }
+  }
 
 	fd = open(argv[1], O_RDWR | O_NOCTTY );
 	if (fd <0) {
@@ -59,12 +61,9 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	// TODO mudar nome do ficheiro para argumento do main
-	unsigned char *message = readFile("pinguim.gif", &fileSize);
-
-	int fileNameSize = strlen("pinguim.gif");
-	unsigned char *fileName = (unsigned char *)malloc(fileNameSize);
-	fileName = "pinguim.gif";
+	unsigned char *fileName = argv[2];
+	unsigned char *message = readFile(fileName, &fileSize);
+	int fileNameSize = strlen(fileName);
 
 	//getting the value of the file size in a char array to minimize the bytes used from fileSize
 	char fileSizeBuf[sizeof(fileSize) + 2];
@@ -434,7 +433,7 @@ int llwrite(int fd, unsigned char * buffer, int length) {
 		unsigned char ctrl;
 
 
-		while( !received && (retries >= NUM_RETRIES) ) {
+		while( !received && (retries != NUM_RETRIES) ) {
 
 			if( resend ) {
 				bytesW = write(fd, Iarray, IarraySize);
@@ -531,6 +530,11 @@ unsigned char *readFile(unsigned char *fileName, off_t *fileSize) {
 	unsigned char *fileData;
 
 	f = fopen(fileName, "rb");
+
+  if(f == NULL) {
+    printf("File not found or doesn't exist \n");
+    exit(1);
+  }
 
 	stat((char *) fileName, &file);
 
