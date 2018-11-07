@@ -56,6 +56,9 @@ int main(int argc, char** argv)
 
 	(void) signal(SIGALRM, alarmHandler);
 
+	 struct timespec requestStart, requestEnd;
+	 clock_gettime(CLOCK_REALTIME, &requestStart);
+
 	if( llopen(fd) == 0 ) {
 		printf("Failed to make a connection to the receiver \n");
 		return -1;
@@ -74,6 +77,7 @@ int main(int argc, char** argv)
 	int sizeDP = bytesForEachPacket;
 
 	/* RESTO DO PROTOCOLO (INFO FRAMES ETC.) */
+	srand(time(NULL));
 	 while (indice < fileSize)
 	{
 		//cut the message in the bytesForEachPacket
@@ -91,6 +95,14 @@ int main(int argc, char** argv)
 			return -1;
 		}
 	}
+
+	//T_porp
+	clock_gettime(CLOCK_REALTIME, &requestEnd);
+
+	double accum = (requestEnd.tv_sec - requestStart.tv_sec) + (requestEnd.tv_nsec - requestStart.tv_nsec) / 1E9;
+
+	printf("Seconds passed: %f seconds\n", accum);
+	printf("Total C rate: %f  Bytes/s\n", (double)fileSize / accum);
 
 	//send end frame
 	sendControlFrame(fd, C_END, fileSizeBuf, fileName);
@@ -422,7 +434,12 @@ int llwrite(int fd, unsigned char * buffer, int length) {
 		resend = FALSE;
 		received = FALSE;
 
-		bytesW = write(fd, Iarray, IarraySize);
+		unsigned char *newArray;
+		newArray = BCC1changer(Iarray, IarraySize); //altera bcc1
+		newArray = BCC2changer(newArray, IarraySize);  //altera bcc2
+		bytesW = write(fd, newArray, IarraySize);
+
+		//bytesW = write(fd, Iarray, IarraySize);
 
 		//ativa alarme
 		alarm(timeout);
@@ -628,6 +645,35 @@ unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDP, of
 	return packet;
 }
 
+unsigned char *BCC2changer(unsigned char *packet, int sizePacket)
+{
+  unsigned char *newArray = (unsigned char *)malloc(sizePacket);
+  memcpy(newArray, packet, sizePacket);
+  int r = (rand() % 100) + 1;
+  if (r <= bcc2ErrorPercentage)
+  {
+    int i = (rand() % (sizePacket - 5)) + 4;
+    unsigned char randomLetter = (unsigned char)('A' + (rand() % 26));
+    newArray[i] = randomLetter;
+    printf("Modifiquei BCC2\n");
+  }
+  return newArray;
+}
+
+unsigned char *BCC1changer(unsigned char *packet, int sizePacket)
+{
+  unsigned char *newArray = (unsigned char *)malloc(sizePacket);
+  memcpy(newArray, packet, sizePacket);
+  int r = (rand() % 100) + 1;
+  if (r <= bcc1ErrorPercentage)
+  {
+    int i = (rand() % 3) + 1;
+    unsigned char randomLetter = (unsigned char)('A' + (rand() % 26));
+    newArray[i] = randomLetter;
+    printf("Modifiquei BCC1\n");
+  }
+  return newArray;
+}
 
 void llclose(int fd) {
 

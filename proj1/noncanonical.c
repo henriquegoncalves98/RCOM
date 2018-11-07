@@ -30,7 +30,6 @@ int main(int argc, char** argv) {
 		perror(argv[1]); exit(-1);
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
-	
 
 	llopen(fd);
 
@@ -52,7 +51,6 @@ int main(int argc, char** argv) {
 	int received2 = FALSE;
 	unsigned char packet[bytesForEachPacket+5];
 	int packetSize = 0;
-
 
 	while(!received2) {
 		

@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
+
 
 #define FLAG 				0x7E
 #define A 					0x03
@@ -31,6 +33,9 @@
 #define ESCAPE			    0x7D
 #define ESCAPE_FLAG         0x5E
 #define ESCAPE_ESCAPE       0x5D
+
+#define bcc1ErrorPercentage 0
+#define bcc2ErrorPercentage 20
 
 enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, ESCAPING, DONE};
 
@@ -65,5 +70,9 @@ unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDataPa
 * Application layer
 */
 unsigned char *packetHeader(unsigned char *message, int *sizeDataPacket, off_t FileSize);
+
+unsigned char *BCC1changer(unsigned char *packet, int sizePacket);
+
+unsigned char *BCC2changer(unsigned char *packet, int sizePacket);
 
 void llclose(int fd);
