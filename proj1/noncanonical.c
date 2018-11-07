@@ -1,7 +1,7 @@
 /*Non-Canonical Input Processing*/
 #include "noncanonical.h"
 
-#define BAUDRATE 			B38400
+//#define BAUDRATE B38400
 #define _POSIX_SOURCE 		1 /* POSIX compliant source */
 #define FALSE 				0
 #define TRUE 				1
@@ -12,17 +12,22 @@ volatile int STOP=FALSE;
 int messageToReceive = 0;
 struct termios oldtio,newtio;
 int bytesForEachPacket = 100;
+int BAUDRATE;
 
 
 int main(int argc, char** argv) {
 	int fd;
 	
 	//PORT CONFIGURATION AND OPENING PORTS
-	if ( (argc < 2) ||
-	((strcmp("/dev/ttyS0", argv[1])!=0) &&
-	(strcmp("/dev/ttyS1", argv[1])!=0) )) {
-	printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+	if(argc < 3) {
+		printf("Invalid number of arguments! \n");
 		exit(1);
+	  }
+	  else {
+		if( (strcmp("/dev/ttyS0", argv[1])!=0) && (strcmp("/dev/ttyS1", argv[1])!=0) ) {
+		  printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+		  exit(1);
+		}
 	}
 
 	fd = open(argv[1], O_RDWR | O_NOCTTY );
@@ -30,7 +35,7 @@ int main(int argc, char** argv) {
 		perror(argv[1]); exit(-1);
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
-
+	BAUDRATE = getBaudrate(atoi(argv[2]));
 	llopen(fd);
 
 	unsigned char *startFrame = (unsigned char *)malloc(0);
@@ -66,7 +71,7 @@ int main(int argc, char** argv) {
 		}
 
 	}
-
+	
 	makeNewFile(message, fileData, fileDataSize);
 
 	llclose(fd);
@@ -390,6 +395,7 @@ int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *s
 
 void getPacketInfo(unsigned char *fileData, int *fileDataSize, unsigned char *packet, int packetSize) {
 	
+	
 	unsigned char *fileData2 = (unsigned char *)malloc(packetSize - 4);
 	int i, j;
 	for(i=4, j=0; i<packetSize; i++, j++) {
@@ -402,12 +408,15 @@ void getPacketInfo(unsigned char *fileData, int *fileDataSize, unsigned char *pa
 
 	(*fileDataSize) += (packetSize - 4);
 
+	for(i=0; i<(*fileDataSize); i++) 
+		printf("%x ", fileData[i]);
+
 	free(fileData2);
 }
 
 void makeNewFile(Message message, unsigned char *fileData, int fileDataSize) {
 	FILE *f;
-	
+
 	f = fopen((char *)message.fileName, "wb+");
 
 	fwrite((void *)fileData, sizeof(unsigned char), fileDataSize, f);
@@ -417,17 +426,36 @@ void makeNewFile(Message message, unsigned char *fileData, int fileDataSize) {
 
 void llclose(int fd) {
 	
-	tcsetattr(fd,TCSANOW,&oldtio);
 	
-
-	caughtSUFrame(fd, DISC_C);
-	printf("DISC frame received \n");
-
-	sendAcknowlegment(fd, DISC_C);
-	printf("DISC frame sent \n");
+	if( caughtSUFrame(fd, DISC_C) ) {
+		printf("DISC frame received \n");
+		sendAcknowlegment(fd, DISC_C);
+		printf("DISC frame sent \n");
+	}
 
 	caughtSUFrame(fd, UA_C);
 	printf("UA frame received \n");
 
+	tcsetattr(fd,TCSANOW,&oldtio);
+
 	close(fd);
+}
+
+int getBaudrate(int baudrate) {
+	switch (baudrate) {
+
+		case 2400:
+			return B2400;
+		case 4800:
+			return B4800;
+		case 9600:
+			return B9600;
+		case 19200:
+			return B19200;
+		case 38400:
+			return B38400;
+
+		default:
+			return B38400;
+	}
 }

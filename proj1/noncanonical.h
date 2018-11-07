@@ -56,3 +56,5 @@ void getPacketInfo(unsigned char *fileData, int *fileDataSize, unsigned char *pa
 void makeNewFile(Message message, unsigned char *fileData, int fileDataSize);
 
 void llclose(int fd);
+
+int getBaudrate(int baudrate);
