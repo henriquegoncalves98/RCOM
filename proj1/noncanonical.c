@@ -58,9 +58,7 @@ int main(int argc, char** argv) {
 		
 		do {
 			packetSize = llread(fd, packet);
-			
 		} while(packetSize == -1);
-
 
 		if( hasFinishedReceiving(packet, packetSize, startFrame, startFrameSize) )
 			received2 = TRUE;
@@ -70,9 +68,8 @@ int main(int argc, char** argv) {
 		}
 
 	}
-	
-	makeNewFile(message, fileData, fileDataSize);
 
+	makeNewFile(message, fileData, fileDataSize);
 
 	llclose(fd);
 	return 0;
@@ -311,10 +308,8 @@ int llread(int fd, unsigned char * buffer) {
 	if (otherBuffSize > 0)
 	{
 		if (frameNumber == messageToReceive)
-		{
 			messageToReceive ^= 1;
-		}
-		else
+		else 
 			otherBuffSize = -1;
 	}
 
