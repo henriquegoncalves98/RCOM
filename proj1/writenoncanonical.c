@@ -1,7 +1,7 @@
 /*Non-Canonical Input Processing*/
 #include "writenoncanonical.h"
 
-#define BAUDRATE 			B38400
+//#define BAUDRATE 			B38400
 #define MODEMDEVICE 		"/dev/ttyS1"
 #define _POSIX_SOURCE 		1 /* POSIX compliant source */
 #define FALSE 				0
@@ -11,14 +11,15 @@
 volatile int STOP=FALSE;
 
 struct termios oldtio, newtio;
-int timeout = 3;
+int timeout;
 int retries = 0;
-int NUM_RETRIES = 3;
+int NUM_RETRIES;
 int resend = FALSE;
 int received = FALSE;
 int messageToSend = 0;
-int bytesForEachPacket = 100;
+int bytesForEachPacket;
 int numTotalPackets = 0;
+int BAUDRATE;
 
 
 static void alarmHandler(int sig)
@@ -29,7 +30,7 @@ static void alarmHandler(int sig)
   received = FALSE;
 }
 
-//compiled port NBytesPerPacket MaxNTries timeout nameOfFile
+//compiled port NBytesPerPacket MaxNTries timeout baudrate nameOfFile
 int main(int argc, char** argv)
 {
 	int fd;
@@ -53,9 +54,14 @@ int main(int argc, char** argv)
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
 
-	bytesForEachPacket = (*argv[2]);
-	NUM_RETRIES = (*argv[3]);
-	timeout = (*argv[4]);
+	bytesForEachPacket = atoi(argv[2]);
+
+	NUM_RETRIES = atoi(argv[3]);
+
+	timeout = atoi(argv[4]);
+
+	BAUDRATE = getBAUDRATE(atoi(argv[5]));
+
 
 	(void) signal(SIGALRM, alarmHandler);
 
@@ -67,7 +73,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	unsigned char *fileName = argv[5];
+	unsigned char *fileName = argv[6];
 	unsigned char *message = readFile(fileName, &fileSize);
 	int fileNameSize = strlen(fileName);
 
@@ -84,8 +90,14 @@ int main(int argc, char** argv)
 	 while (indice < fileSize)
 	{
 		//cut the message in the bytesForEachPacket
+		printf("\n<---------------------------------------------->\n");
 		unsigned char *data_packet = cutMessage(message, &indice, &sizeDP, fileSize);
 		printf("Sent packet nr %d\n", numTotalPackets);
+
+		int l;
+		for(l=0; l<sizeDP; l++)
+			printf("%x ", data_packet[l]);
+		printf("\n");
 
 		//packet header
 		int headerSize = sizeDP;
@@ -103,15 +115,35 @@ int main(int argc, char** argv)
 	clock_gettime(CLOCK_REALTIME, &requestEnd);
 
 	double accum = (requestEnd.tv_sec - requestStart.tv_sec) + (requestEnd.tv_nsec - requestStart.tv_nsec) / 1E9;
-
+	
+	printf("\n\n<---------------------------------------------->\n\t\tTOTAL\n");
 	printf("Seconds passed: %f seconds\n", accum);
 	printf("Total C rate: %f  Bytes/s\n", (double)fileSize / accum);
+
+	printf("<---------------------------------------------->\n");
 
 	//send end frame
 	sendControlFrame(fd, C_END, fileSizeBuf, fileName);
 
 	llclose(fd);
 	return 0;
+}
+
+int getBAUDRATE(int rate) {
+	
+	if(rate == 38400)
+		return B38400;
+	else if(rate == 19200)
+		return B19200;
+	else if(rate == 9600)
+		return B9600;
+	else if(rate == 4800)
+		return B4800;
+	else if(rate == 2400)
+		return B2400;
+	else
+		return B38400;
+
 }
 
 
@@ -132,7 +164,7 @@ int llopen(int fd)
 	/* set input mode (non-canonical, no echo,...) */
 	newtio.c_lflag = 0;
 
-	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
+	newtio.c_cc[VTIME]    = 1;   /* inter-character timer unused */
 	newtio.c_cc[VMIN]     = 0;   /* blocking read until 1 char received */
 
 
@@ -310,6 +342,60 @@ void caughtUA(enum state_machine *state, unsigned char *c) {
 
 }
 
+void caughtDISC(enum state_machine *state, unsigned char *c) {
+
+
+	switch(*state) {
+		case(START):
+			if(*c == FLAG)
+				*state = FLAG_RCV;
+			break;
+
+		case(FLAG_RCV):
+			if(*c == A)
+				*state = A_RCV;
+			else {
+				if(*c == FLAG)
+					break;
+				else
+					*state = START;
+			}
+			break;
+
+		case(A_RCV):
+			if(*c == DISC_C)
+				*state = C_RCV;
+			else {
+				if(*c == FLAG)
+					*state = FLAG_RCV;
+				else
+					*state = START;
+			}
+			break;
+
+		case(C_RCV):
+			if(*c == UA_BCC1)
+				*state = BCC1_RCV;
+			else {
+				if(*c == FLAG)
+					*state = FLAG_RCV;
+				else
+					*state = START;
+			}
+			break;
+
+		case(BCC1_RCV):
+			if(*c == FLAG)
+				*state = DONE;
+			else
+				*state = START;
+
+			break;
+	}
+
+}
+
+
 void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) {
 
 	switch(*state) {
@@ -366,7 +452,7 @@ void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) 
 int llwrite(int fd, unsigned char * buffer, int length) {
 
 	unsigned char BCC2;
-  unsigned char *BCC2Stuffed = (unsigned char *)malloc(sizeof(unsigned char));
+  unsigned char *BCC2Stuffed = (unsigned char *)malloc(sizeof(unsigned char) * 2);
 	unsigned char *Iarray = (unsigned char *)malloc((length + 6) * sizeof(unsigned char));
 	int IarraySize = length + 6;
 	int sizeBCC2 = 1;
@@ -436,12 +522,12 @@ int llwrite(int fd, unsigned char * buffer, int length) {
 		retries = 0;
 		resend = FALSE;
 		received = FALSE;
-
+		
 		unsigned char *newArray;
 		newArray = BCC1changer(Iarray, IarraySize); //altera bcc1
 		newArray = BCC2changer(newArray, IarraySize);  //altera bcc2
 		bytesW = write(fd, newArray, IarraySize);
-
+		
 		//bytesW = write(fd, Iarray, IarraySize);
 
 		//ativa alarme
@@ -498,7 +584,9 @@ int llwrite(int fd, unsigned char * buffer, int length) {
 
 	} while(repeat_frame);
 
-  free(Iarray);
+
+
+  	free(Iarray);
 
 	if (retries >= NUM_RETRIES || bytesW <= 0)
 		return FALSE;
@@ -680,20 +768,50 @@ unsigned char *BCC1changer(unsigned char *packet, int sizePacket)
 
 void llclose(int fd) {
 
+
+	sendSUFrame(fd, DISC_C);
+	printf("DISC frame sent \n");
+	
+	resend = TRUE;
+	received = FALSE;
+	alarm(timeout);
+
+	enum state_machine state = START;
+	unsigned char c;
+
+	while( !received && (retries != NUM_RETRIES) ) {
+
+		if( resend ) {
+			sendSUFrame(fd, DISC_C);
+			alarm(timeout);
+			resend = FALSE;
+			state = START;
+		}
+		else {
+			read(fd, &c, 1);
+			caughtDISC(&state, &c);
+
+			if(state == DONE)
+			{
+				printf("DISC received \n");
+				received = TRUE;
+			}
+		}
+	}
+
+	if(retries == NUM_RETRIES) {
+		printf("Number of tries exceeded the maximum value \n");
+		exit(-1);
+	}
+
+	sendSUFrame(fd, UA_C);
+	printf("UA frame sent \n");
+
+
 	if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
-
-
-	sendSUFrame(fd, DISC_C);
-	printf("DISC frame sent \n");
-
-	caughtSUFrame(fd, DISC_C);
-	printf("DISC frame caught \n");
-
-	sendSUFrame(fd, UA_C);
-	printf("UA frame sent \n");
 
 	close(fd);
 }

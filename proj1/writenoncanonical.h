@@ -49,6 +49,8 @@ void caughtUA(enum state_machine *state, unsigned char *c);
 
 void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl);
 
+int getBAUDRATE(int rate);
+
 int llwrite(int fd, unsigned char * buffer, int length);
 
 unsigned char calculoBCC2(unsigned char *mensagem, int size);
