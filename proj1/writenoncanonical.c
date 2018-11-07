@@ -83,7 +83,7 @@ int main(int argc, char** argv)
 
 		//packet header
 		int headerSize = sizeDP;
-		char *final_data_packet = packetHeader(data_packet, &headerSize, fileSize);
+		unsigned char *final_data_packet = packetHeader(data_packet, &headerSize, fileSize);
 
 		//sends the data packet
 		if (!llwrite(fd, final_data_packet, headerSize))
@@ -92,8 +92,6 @@ int main(int argc, char** argv)
 			return -1;
 		}
 	}
-
-
 
 	//send end frame
 	sendControlFrame(fd, C_END, fileSizeBuf, fileName);
@@ -133,8 +131,6 @@ int llopen(int fd)
 
 
 	printf("New termios structure set\n");
-
-
 
 	sendSUFrame(fd, SET_C);
 	printf("SET frame sent \n");
@@ -353,14 +349,11 @@ void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) 
 	}
 }
 
-int llwrite(int fd, char * buffer, int length) {
+int llwrite(int fd, unsigned char * buffer, int length) {
 
 	unsigned char BCC2;
-  printf("359 \n");
   unsigned char *BCC2Stuffed = (unsigned char *)malloc(sizeof(unsigned char));
-  printf("361 \n");
 	unsigned char *Iarray = (unsigned char *)malloc((length + 6) * sizeof(unsigned char));
-  printf("363 \n");
 	int IarraySize = length + 6;
 	int sizeBCC2 = 1;
 	BCC2 = calculoBCC2(buffer, length);
@@ -385,14 +378,12 @@ int llwrite(int fd, char * buffer, int length) {
 	for(; i < length;i++) {
 
 		if(buffer[i] == FLAG) {
-      printf("388 \n");
 			Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
 			Iarray[j] = ESCAPE;
 			Iarray[j + 1] = ESCAPE_FLAG;
 			j += 2;
 		}
 		else if(buffer[i] == ESCAPE) {
-      printf("395 \n");
 			Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
 			Iarray[j] = ESCAPE;
 			Iarray[j + 1] = ESCAPE_ESCAPE;
@@ -411,7 +402,6 @@ int llwrite(int fd, char * buffer, int length) {
 	}
 	else
 	{
-    printf("414 \n");
 		Iarray = (unsigned char *)realloc(Iarray, ++IarraySize);
 		Iarray[j] = BCC2Stuffed[0];
 		Iarray[j+1] = BCC2Stuffed[1];
@@ -422,7 +412,7 @@ int llwrite(int fd, char * buffer, int length) {
 
 
 
-	int repeat_frame = TRUE;
+	int repeat_frame = FALSE;
 	ssize_t bytesW;
 
 	//send I message now
@@ -432,12 +422,6 @@ int llwrite(int fd, char * buffer, int length) {
 		retries = 0;
 		resend = FALSE;
 		received = FALSE;
-
-    int l;
-    for(l=0; l<IarraySize; l++) {
-      printf("%x ", Iarray[l]);
-    }
-    printf("\n");
 
 		bytesW = write(fd, Iarray, IarraySize);
 
@@ -450,7 +434,7 @@ int llwrite(int fd, char * buffer, int length) {
 		unsigned char ctrl;
 
 
-		while( !received && (retries != NUM_RETRIES) ) {
+		while( !received && (retries >= NUM_RETRIES) ) {
 
 			if( resend ) {
 				bytesW = write(fd, Iarray, IarraySize);
@@ -495,9 +479,8 @@ int llwrite(int fd, char * buffer, int length) {
 
 	} while(repeat_frame);
 
-  printf("498 \n");
   free(Iarray);
-  printf("500 \n");
+
 	if (retries >= NUM_RETRIES || bytesW <= 0)
 		return FALSE;
 	else
@@ -522,9 +505,7 @@ unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2)
   unsigned char *BCC2Stuffed;
   if (BCC2 == FLAG)
   {
-    printf("520 \n");
     BCC2Stuffed = (unsigned char *)malloc(2 * sizeof(unsigned char));
-    printf("522 \n");
     BCC2Stuffed[0] = ESCAPE;
     BCC2Stuffed[1] = ESCAPE_FLAG;
     (*sizeBCC2)++;
@@ -533,9 +514,7 @@ unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2)
   {
     if (BCC2 == ESCAPE)
     {
-      printf("531 \n");
       BCC2Stuffed = (unsigned char *)malloc(2 * sizeof(unsigned char));
-      printf("533 \n");
       BCC2Stuffed[0] = ESCAPE;
       BCC2Stuffed[1] = ESCAPE_ESCAPE;
       (*sizeBCC2)++;
@@ -568,6 +547,7 @@ unsigned char *readFile(unsigned char *fileName, off_t *fileSize) {
 
 void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned char *fileName) {
 
+
 	if (state == C_START)
 		printf("Sending START control package.\n");
 	else if (state == C_END)
@@ -583,12 +563,13 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 	controlFrame[ind++] = state;
 	controlFrame[ind++] = T1;
 	controlFrame[ind++] = strlen(fileSizeBuf);
-	for (int i = 0; i < strlen(fileSizeBuf); i++)
+  int i;
+	for (i = 0; i < strlen(fileSizeBuf); i++)
 		controlFrame[ind++] = fileSizeBuf[i];
 
 	controlFrame[ind++] = T2;
 	controlFrame[ind++] = strlen(fileName);
-	for (int i = 0; i < strlen(fileName); i++)
+	for (i = 0; i < strlen(fileName); i++)
 		controlFrame[ind++] = fileName[i];
 
 
@@ -598,6 +579,7 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 		printf("Error in llwrite\n");
 		exit(-1);
 	}
+
 
 	if (state == C_START)
 		printf("START control package sent.\n");
@@ -609,37 +591,36 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 
 }
 
-char *packetHeader(unsigned char *message, int *sizeDP, off_t fileSize)
+unsigned char *packetHeader(unsigned char *message, int *sizeDP, off_t fileSize)
 {
 	*sizeDP += 4;
-  printf("604 \n");
-	char * finalPacket = (char *)malloc(*sizeDP);
+	unsigned char * finalPacket = (unsigned char *)malloc(*sizeDP);
 	//packet header
 	finalPacket[0] = C_DATA;
 	finalPacket[1] = numTotalPackets % 255;
 	finalPacket[2] = (int)fileSize / 256;
 	finalPacket[3] = (int)fileSize % 256;
 	//now we need to concatenate the header with the body of the final packet
-	finalPacket = strcat(finalPacket , (char *)message);
-  printf("613 \n");
+  memcpy(finalPacket + 4, message, ((*sizeDP)-4));
 	numTotalPackets++;
+
 	return finalPacket;
 }
 
 unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDP, off_t fileSize)
 {
-  printf("620 \n");
 	if((*indice + *sizeDP) > fileSize)
 	{
 		*sizeDP = fileSize - *indice;
 	}
-  printf("625 \n");
+
 	unsigned char * packet = (unsigned char *)malloc(*sizeDP);
-	for(int i = 0; i < *sizeDP; i++, (*indice)++)
+  int i;
+  for(i = 0; i < *sizeDP; i++, (*indice)++)
 	{
 		packet[i] = message[*indice];
 	}
-  printf("631 \n");
+
 	return packet;
 }
 

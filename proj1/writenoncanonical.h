@@ -44,7 +44,7 @@ void caughtUA(enum state_machine *state, unsigned char *c);
 
 void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl);
 
-int llwrite(int fd, char * buffer, int length);
+int llwrite(int fd, unsigned char * buffer, int length);
 
 unsigned char calculoBCC2(unsigned char *mensagem, int size);
 
@@ -64,6 +64,6 @@ unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDataPa
 * It appends the packet header to the begginning of data packets
 * Application layer
 */
-char *packetHeader(unsigned char *message, int *sizeDataPacket, off_t FileSize);
+unsigned char *packetHeader(unsigned char *message, int *sizeDataPacket, off_t FileSize);
 
 void llclose(int fd);
