@@ -33,9 +33,7 @@ enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, ESCAPING, DONE};
 typedef struct {
    unsigned char    *fileName;
    int              fileNameLength;
-   unsigned char    *fileSizeBuf;
-   int              fileSizeBufLength;
-   unsigned char    *fileData;
+   int 				fileSize;
 } Message;
 
 
@@ -53,8 +51,8 @@ void getFileInfo(unsigned char *startFrame, int startFrameSize, Message *message
 
 int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *startFrame, int startFrameSize);
 
-void getPacketInfo(Message *message, unsigned char *packet, int packetSize);
+void getPacketInfo(unsigned char *fileData, int *fileDataSize, unsigned char *packet, int packetSize);
 
-void makeNewFile(Message message);
+void makeNewFile(Message message, unsigned char *fileData, int fileDataSize);
 
 void llclose(int fd);

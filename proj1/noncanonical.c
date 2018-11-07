@@ -11,6 +11,7 @@ volatile int STOP=FALSE;
 
 int messageToReceive = 0;
 struct termios oldtio,newtio;
+int bytesForEachPacket = 100;
 
 
 int main(int argc, char** argv) {
@@ -33,43 +34,46 @@ int main(int argc, char** argv) {
 
 	llopen(fd);
 
-	unsigned char *startFrame;
+	unsigned char *startFrame = (unsigned char *)malloc(0);
 	int startFrameSize;
 	
 	do {
 		startFrameSize = llread(fd, startFrame);
 	}while(startFrameSize == -1);
-
+	printf("START frame received \n");
 
 	Message message;
-
+	
 	getFileInfo(startFrame, startFrameSize, &message);
-	message.fileData = (unsigned char *)malloc(atoi((const char *)message.fileSizeBuf));
+	unsigned char fileData[message.fileSize];
+	int fileDataSize = 0;
+	
 
 	int received2 = FALSE;
-	unsigned char *packet = (unsigned char *)malloc(0);
-	int packetSize;
+	unsigned char packet[bytesForEachPacket+5];
+	int packetSize = 0;
+
 
 	while(!received2) {
-
+		
 		do {
 			packetSize = llread(fd, packet);
-		}while(packetSize == -1);
+			
+		} while(packetSize == -1);
+
 
 		if( hasFinishedReceiving(packet, packetSize, startFrame, startFrameSize) )
 			received2 = TRUE;
 		else {
 			received2 = FALSE;
-			getPacketInfo(&message, packet, packetSize);
+			getPacketInfo(fileData, &fileDataSize, packet, packetSize);
 		}
+
 	}
+	
+	makeNewFile(message, fileData, fileDataSize);
 
-	makeNewFile(message);
 
-	free(packet);
-	free(message.fileData);
-	free(message.fileSizeBuf);
-	free(message.fileName);
 	llclose(fd);
 	return 0;
 }
@@ -249,10 +253,16 @@ int llread(int fd, unsigned char * buffer) {
 						state = DONE;
 					}
 					else {
-						if( frameNumber == 0)
-							sendAcknowlegment(fd, REJ_C0);
-						else
-							sendAcknowlegment(fd, REJ_C1);
+						if( (frameNumber == 0) && (messageToReceive == 1) )
+							sendAcknowlegment(fd, RR_C1);
+						else if( (frameNumber == 1) && (messageToReceive == 0) )
+							sendAcknowlegment(fd, RR_C0);
+						else {
+							if( frameNumber == 0)
+								sendAcknowlegment(fd, REJ_C0);
+							else
+								sendAcknowlegment(fd, REJ_C1);
+						}
 
 						state = DONE;
 						frame_repeat = TRUE;
@@ -294,9 +304,9 @@ int llread(int fd, unsigned char * buffer) {
 	
 
 
-	printf("Frame size: %d\n", otherBuffSize);
-	//frame tem BCC2 no fim
-	buffer = (unsigned char *)realloc(otherBuff, --otherBuffSize);
+	printf("Information packet received with size: %d\n", otherBuffSize);
+	//Removes BCC2 from end of frame
+	otherBuff = (unsigned char *)realloc(otherBuff, --otherBuffSize);
 
 	if (otherBuffSize > 0)
 	{
@@ -308,17 +318,12 @@ int llread(int fd, unsigned char * buffer) {
 			otherBuffSize = -1;
 	}
 
-	int l;
-	for(l=0; l<otherBuffSize; l++) {
-		printf("%x ", otherBuff[l]);
-	}	
+	int i;
+	for(i=0; i<otherBuffSize; i++) {
+		buffer[i] = otherBuff[i];
+	}
 
-	printf("\n\n");
-	
-	memcpy(buffer, otherBuff, otherBuffSize);
 
-	free(otherBuff);
-	
 	return otherBuffSize;
 }
 
@@ -368,13 +373,12 @@ void getFileInfo(unsigned char *startFrame, int startFrameSize, Message *message
 	for(i=0; i<l1; i++) {
 		size[i] = startFrame[3 + i];
 	}
-	(*message).fileSizeBuf = (unsigned char*)malloc(l1);
-	memcpy((*message).fileSizeBuf, size, l1);
-	(*message).fileSizeBufLength = l1;
+	
+	(*message).fileSize = atoi((const char *)size);
+
 
 	free(name);
 	free(size);
-
 }
 
 int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *startFrame, int startFrameSize) {
@@ -384,33 +388,36 @@ int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *s
 			if( packet[i] != startFrame[i] )
 				return FALSE;
 		}
-
+		printf("END frame received \n");
 		return TRUE;
 	}
 
 	return FALSE;
 }
 
-void getPacketInfo(Message *message, unsigned char *packet, int packetSize) {
-
-	unsigned char *fileData = (unsigned char *)malloc(packetSize - 4);
+void getPacketInfo(unsigned char *fileData, int *fileDataSize, unsigned char *packet, int packetSize) {
+	
+	unsigned char *fileData2 = (unsigned char *)malloc(packetSize - 4);
 	int i, j;
-	for(i=4, j=0; i<(packetSize-4); i++, j++) {
-		fileData[j] = packet[i];
+	for(i=4, j=0; i<packetSize; i++, j++) {
+		fileData2[j] = packet[i];
 	}
 
-	
-	memcpy((*message).fileData + strlen((*message).fileData), fileData, strlen(fileData));
+	for( i=0; i<(packetSize - 4); i++) {
+		fileData[(*fileDataSize) + i] = fileData2[i];
+	}
 
-	free(fileData);
+	(*fileDataSize) += (packetSize - 4);
+
+	free(fileData2);
 }
 
-void makeNewFile(Message message) {
+void makeNewFile(Message message, unsigned char *fileData, int fileDataSize) {
 	FILE *f;
-
+	
 	f = fopen((char *)message.fileName, "wb+");
 
-	fwrite((void *)message.fileData, message.fileData[0]/sizeof(unsigned char), strlen(message.fileSizeBuf), f);
+	fwrite((void *)fileData, sizeof(unsigned char), fileDataSize, f);
 
 	fclose(f);
 }
@@ -427,7 +434,7 @@ void llclose(int fd) {
 	printf("DISC frame sent \n");
 
 	caughtSUFrame(fd, UA_C);
-	printf("DISC frame received \n");
+	printf("UA frame received \n");
 
 	close(fd);
 }
