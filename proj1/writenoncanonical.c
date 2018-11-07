@@ -82,6 +82,7 @@ int main(int argc, char** argv)
 	{
 		//cut the message in the bytesForEachPacket
 		unsigned char *data_packet = cutMessage(message, &indice, &sizeDP, fileSize);
+		printf("\n<------------------------------------------>\n");
 		printf("Sent packet nr %d\n", numTotalPackets);
 
 		//packet header
@@ -101,8 +102,9 @@ int main(int argc, char** argv)
 
 	double accum = (requestEnd.tv_sec - requestStart.tv_sec) + (requestEnd.tv_nsec - requestStart.tv_nsec) / 1E9;
 
+	printf("\n<------------------------------------------>\n\t\tTOTAL\n");
 	printf("Seconds passed: %f seconds\n", accum);
-	printf("Total C rate: %f  Bytes/s\n", (double)fileSize / accum);
+	printf("Total C rate: %f  Bytes/s\n\n\n", (double)fileSize / accum);
 
 	//send end frame
 	sendControlFrame(fd, C_END, fileSizeBuf, fileName);

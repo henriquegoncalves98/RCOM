@@ -35,7 +35,7 @@
 #define ESCAPE_ESCAPE       0x5D
 
 #define bcc1ErrorPercentage 0
-#define bcc2ErrorPercentage 20
+#define bcc2ErrorPercentage 0
 
 enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, ESCAPING, DONE};
 
