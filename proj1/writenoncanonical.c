@@ -29,23 +29,23 @@ static void alarmHandler(int sig)
   received = FALSE;
 }
 
-
+//compiled port NBytesPerPacket MaxNTries timeout nameOfFile
 int main(int argc, char** argv)
 {
 	int fd;
 	off_t fileSize;
 	off_t indice = 0;
 
-  if(argc < 3) {
-    printf("Invalid number of arguments! \n");
-    exit(1);
-  }
-  else {
-    if( (strcmp("/dev/ttyS0", argv[1])!=0) && (strcmp("/dev/ttyS1", argv[1])!=0) ) {
-      printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
-      exit(1);
-    }
-  }
+	  if(argc < 6) {
+		printf("Invalid number of arguments! \n");
+		exit(1);
+	  }
+	  else {
+		if( (strcmp("/dev/ttyS0", argv[1])!=0) && (strcmp("/dev/ttyS1", argv[1])!=0) ) {
+		  printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+		  exit(1);
+		}
+	  }
 
 	fd = open(argv[1], O_RDWR | O_NOCTTY );
 	if (fd <0) {
@@ -53,6 +53,9 @@ int main(int argc, char** argv)
 	}
 	//END OF PORT CONFIGURATION AND OPENING PORTS
 
+	bytesForEachPacket = (*argv[2]);
+	NUM_RETRIES = (*argv[3]);
+	timeout = (*argv[4]);
 
 	(void) signal(SIGALRM, alarmHandler);
 
@@ -64,7 +67,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	unsigned char *fileName = argv[2];
+	unsigned char *fileName = argv[5];
 	unsigned char *message = readFile(fileName, &fileSize);
 	int fileNameSize = strlen(fileName);
 
@@ -82,7 +85,6 @@ int main(int argc, char** argv)
 	{
 		//cut the message in the bytesForEachPacket
 		unsigned char *data_packet = cutMessage(message, &indice, &sizeDP, fileSize);
-		printf("\n<------------------------------------------>\n");
 		printf("Sent packet nr %d\n", numTotalPackets);
 
 		//packet header
@@ -102,9 +104,8 @@ int main(int argc, char** argv)
 
 	double accum = (requestEnd.tv_sec - requestStart.tv_sec) + (requestEnd.tv_nsec - requestStart.tv_nsec) / 1E9;
 
-	printf("\n<------------------------------------------>\n\t\tTOTAL\n");
 	printf("Seconds passed: %f seconds\n", accum);
-	printf("Total C rate: %f  Bytes/s\n\n\n", (double)fileSize / accum);
+	printf("Total C rate: %f  Bytes/s\n", (double)fileSize / accum);
 
 	//send end frame
 	sendControlFrame(fd, C_END, fileSizeBuf, fileName);
