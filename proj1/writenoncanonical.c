@@ -94,11 +94,6 @@ int main(int argc, char** argv)
 		unsigned char *data_packet = cutMessage(message, &indice, &sizeDP, fileSize);
 		printf("Sent packet nr %d\n", numTotalPackets);
 
-		int l;
-		for(l=0; l<sizeDP; l++)
-			printf("%x ", data_packet[l]);
-		printf("\n");
-
 		//packet header
 		int headerSize = sizeDP;
 		unsigned char *final_data_packet = packetHeader(data_packet, &headerSize, fileSize);
@@ -141,6 +136,28 @@ int getBAUDRATE(int rate) {
 		return B4800;
 	else if(rate == 2400)
 		return B2400;
+	else if(rate == 1800)
+		return B2400;
+	else if(rate == 1200)
+		return B1200;
+	else if(rate == 600)
+		return B600;
+	else if(rate == 300)
+		return B300;
+	else if(rate == 200)
+		return B200;
+	else if(rate == 150)
+		return B150;
+	else if(rate == 134)
+		return B134;
+	else if(rate == 110)
+		return B110;
+	else if(rate == 75)
+		return B75;
+	else if(rate == 50)
+		return B50;
+	else if(rate == 0)
+		return B0;
 	else
 		return B38400;
 
@@ -452,7 +469,7 @@ void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl) 
 int llwrite(int fd, unsigned char * buffer, int length) {
 
 	unsigned char BCC2;
-  unsigned char *BCC2Stuffed = (unsigned char *)malloc(sizeof(unsigned char) * 2);
+  	unsigned char *BCC2Stuffed = (unsigned char *)malloc(sizeof(unsigned char) * 2);
 	unsigned char *Iarray = (unsigned char *)malloc((length + 6) * sizeof(unsigned char));
 	int IarraySize = length + 6;
 	int sizeBCC2 = 1;
@@ -527,7 +544,7 @@ int llwrite(int fd, unsigned char * buffer, int length) {
 		newArray = BCC1changer(Iarray, IarraySize); //altera bcc1
 		newArray = BCC2changer(newArray, IarraySize);  //altera bcc2
 		bytesW = write(fd, newArray, IarraySize);
-		
+	
 		//bytesW = write(fd, Iarray, IarraySize);
 
 		//ativa alarme
@@ -560,6 +577,7 @@ int llwrite(int fd, unsigned char * buffer, int length) {
 
 		if( (ctrl == RR1_C && messageToSend == 0) || (ctrl == RR0_C && messageToSend == 1) )
 		{
+
 			if(ctrl == RR1_C)
 				printf("RECEIVED RR1\n");
 			else
@@ -572,6 +590,7 @@ int llwrite(int fd, unsigned char * buffer, int length) {
 		}
 		else if( ctrl == REJ0_C || ctrl == REJ1_C )
 		{
+
 			if(ctrl == REJ1_C)
 				printf("RECEIVED REJ1\n");
 			else
@@ -595,8 +614,7 @@ int llwrite(int fd, unsigned char * buffer, int length) {
 }
 
 
-unsigned char calculoBCC2(unsigned char *mensagem, int size)
-{
+unsigned char calculoBCC2(unsigned char *mensagem, int size) {
   unsigned char BCC2 = mensagem[0];
   int i;
   for (i = 1; i < size; i++)
@@ -607,8 +625,7 @@ unsigned char calculoBCC2(unsigned char *mensagem, int size)
 }
 
 
-unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2)
-{
+unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2) {
   unsigned char *BCC2Stuffed;
   if (BCC2 == FLAG)
   {
@@ -639,10 +656,10 @@ unsigned char *readFile(unsigned char *fileName, off_t *fileSize) {
 
 	f = fopen(fileName, "rb");
 
-  if(f == NULL) {
-    printf("File not found or doesn't exist \n");
-    exit(1);
-  }
+    if(f == NULL) {
+	  printf("File not found or doesn't exist \n");
+	  exit(1);
+    }
 
 	stat((char *) fileName, &file);
 
@@ -699,12 +716,10 @@ void sendControlFrame(int fd, unsigned char state, char* fileSizeBuf, unsigned c
 		printf("END control package sent.\n");
 	else
 		printf("UNKNOWN control package sent.\n");
-
-
 }
 
-unsigned char *packetHeader(unsigned char *message, int *sizeDP, off_t fileSize)
-{
+unsigned char *packetHeader(unsigned char *message, int *sizeDP, off_t fileSize) {
+
 	*sizeDP += 4;
 	unsigned char * finalPacket = (unsigned char *)malloc(*sizeDP);
 	//packet header
@@ -719,8 +734,8 @@ unsigned char *packetHeader(unsigned char *message, int *sizeDP, off_t fileSize)
 	return finalPacket;
 }
 
-unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDP, off_t fileSize)
-{
+unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDP, off_t fileSize) {
+
 	if((*indice + *sizeDP) > fileSize)
 	{
 		*sizeDP = fileSize - *indice;
@@ -736,8 +751,8 @@ unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDP, of
 	return packet;
 }
 
-unsigned char *BCC2changer(unsigned char *packet, int sizePacket)
-{
+unsigned char *BCC2changer(unsigned char *packet, int sizePacket) {
+
   unsigned char *newArray = (unsigned char *)malloc(sizePacket);
   memcpy(newArray, packet, sizePacket);
   int r = (rand() % 100) + 1;
@@ -751,8 +766,8 @@ unsigned char *BCC2changer(unsigned char *packet, int sizePacket)
   return newArray;
 }
 
-unsigned char *BCC1changer(unsigned char *packet, int sizePacket)
-{
+unsigned char *BCC1changer(unsigned char *packet, int sizePacket) {
+
   unsigned char *newArray = (unsigned char *)malloc(sizePacket);
   memcpy(newArray, packet, sizePacket);
   int r = (rand() % 100) + 1;
@@ -767,7 +782,6 @@ unsigned char *BCC1changer(unsigned char *packet, int sizePacket)
 }
 
 void llclose(int fd) {
-
 
 	sendSUFrame(fd, DISC_C);
 	printf("DISC frame sent \n");
