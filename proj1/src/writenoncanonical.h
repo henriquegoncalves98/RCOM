@@ -39,6 +39,8 @@
 
 enum state_machine {START, FLAG_RCV, A_RCV, C_RCV, BCC1_RCV, ESCAPING, DONE};
 
+/*--------------------------Data Link Layer --------------------------*/
+
 int llopen(int fd);
 
 void sendSUFrame(int fd, unsigned char c);
@@ -49,13 +51,21 @@ void caughtUA(enum state_machine *state, unsigned char *c);
 
 void checkACK(enum state_machine *state, unsigned char *c, unsigned char *ctrl);
 
-int getBAUDRATE(int rate);
-
 int llwrite(int fd, unsigned char * buffer, int length);
 
 unsigned char calculoBCC2(unsigned char *mensagem, int size);
 
 unsigned char *stuffingBCC2(unsigned char BCC2, int *sizeBCC2);
+
+unsigned char *BCC1changer(unsigned char *packet, int sizePacket);
+
+unsigned char *BCC2changer(unsigned char *packet, int sizePacket);
+
+void llclose(int fd);
+
+/*--------------------------Application Link Layer --------------------------*/
+
+int getBAUDRATE(int rate);
 
 unsigned char *readFile(unsigned char *fileName, off_t *fileSize);
 
@@ -73,8 +83,3 @@ unsigned char *cutMessage(unsigned char *message, off_t *indice, int *sizeDataPa
 */
 unsigned char *packetHeader(unsigned char *message, int *sizeDataPacket, off_t FileSize);
 
-unsigned char *BCC1changer(unsigned char *packet, int sizePacket);
-
-unsigned char *BCC2changer(unsigned char *packet, int sizePacket);
-
-void llclose(int fd);

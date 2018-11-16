@@ -37,6 +37,7 @@ typedef struct {
 } Message;
 
 
+/*--------------------------Data Link Layer --------------------------*/
 void llopen(int fd);
 
 int llread(int fd, unsigned char * buffer);
@@ -47,6 +48,11 @@ int hasBCC2();
 
 void sendAcknowlegment(int fd, unsigned char c);
 
+void llclose(int fd);
+
+
+/*--------------------------Application Link Layer --------------------------*/
+
 void getFileInfo(unsigned char *startFrame, int startFrameSize, Message *message);
 
 int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *startFrame, int startFrameSize);
@@ -54,7 +60,5 @@ int hasFinishedReceiving(unsigned char *packet, int packetSize, unsigned char *s
 void getPacketInfo(unsigned char *fileData, int *fileDataSize, unsigned char *packet, int packetSize);
 
 void makeNewFile(Message message, unsigned char *fileData, int fileDataSize);
-
-void llclose(int fd);
 
 int getBaudrate(int baudrate);
