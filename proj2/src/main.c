@@ -15,11 +15,11 @@
 #define TRUE                1
 #define FALSE               0
 
-#define SERVER_PORT         6000
+#define SERVER_PORT         21
 #define SERVER_ADDR         "192.168.28.96"
 
 #define MAX_SIZE            100
-#define SOCKET_ARR_SIZE     1000
+#define SOCKET_ARR_SIZE     1500
 
 enum state_machine_1 {START, SPACE, MINUS, DONE};
 enum state_machine_2 {START2, SPACE2, OBRACKET, PORT1, PORT2, DONE2};
@@ -58,7 +58,7 @@ void getPort(int sockfd, Info *info);
 int sendRetrieveCommand(int sockfd, int sockfdClient, Info *info);
 void makeFile(int fd, Info *info);
 
-
+// testar com -> ftp://anonymous:1@speedtest.tele2.net/1KB.zip
 int main(int argc, char **argv) {
 
     int sockfd;
@@ -89,6 +89,13 @@ int main(int argc, char **argv) {
 
     getFilename(&info);
 
+	printf("%s \n", info.username);
+	printf("%s \n", info.password);
+	printf("%s \n", info.server);
+	printf("%s \n", info.path);
+	printf("%s \n", info.filename);
+	printf("%s \n", info.response);
+
     h = retrieveIP(&info);
 
 
@@ -113,18 +120,17 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
+	
     getAnswer(sockfd, &info);
 
-    printf("> %s \n", info.response);
-
-    if( info.response[0] == 1) {
+    if( info.response[0] == '1') {
         getAnswer(sockfd, &info);
     }
-    else if( info.response[0] == 2) {
-        printf("> Connection made. \n");
+    else if( info.response[0] == '2') {
+        printf(" > Connection made. \n");
     }
-    else if( info.response[0] == 4 ) {
-        while( info.response[0] == 4 ) {
+    else if( info.response[0] == '4' ) {
+        while( info.response[0] == '4' ) {
             if( connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0 ) {
                 perror("connect()");
                 close(sockfd);
@@ -134,27 +140,28 @@ int main(int argc, char **argv) {
             getAnswer(sockfd, &info);
         }
     }
-    else if( info.response[0] == 5 ) {
-        printf("> An error was met trying to connect.\n");
+    else if( info.response[0] == '5' ) {
+        printf(" > An error was met trying to connect.\n");
         return -1;
     }
 
-    printf("> Logging in. \n");
+    printf(" > Logging in. \n");
 
     int ans;
+	
+	ans = sendUsername(sockfd, &info);
+	
+	if(ans == 2)
+		ans = sendPassword(sockfd, &info);
+	else if( ans == -1) {
+		return -1;
+	}
 
-    if( sendUsername(sockfd, &info) ) {
-       ans = sendPassword(sockfd, &info);
-
-       if( ans == -1 )
-        return -1;
-    }
-    else
-        return -1;
-
-    printf("> Login successful. \n");
+	if( ans == -1 )
+		return -1;
 
     getPort(sockfd, &info);
+	printf("\n");
 
     /*server address handling*/
 	bzero((char *)&server_addr_client, sizeof(server_addr_client));
@@ -168,12 +175,15 @@ int main(int argc, char **argv) {
 		perror("socket()");
 		exit(0);
 	}
+
 	/*connect to the server*/
 	if (connect(sockfdClient, (struct sockaddr *)&server_addr_client, sizeof(server_addr_client)) < 0)
 	{
 		perror("connect()");
 		exit(0);
 	}
+	
+
 
     ans = sendRetrieveCommand(sockfd, sockfdClient, &info);
 
@@ -183,7 +193,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	else 
-        printf("> An error was met trying to download.\n");
+        printf(" > An error was met trying to download.\n");
 
 	close(sockfd);
 	close(sockfdClient);
@@ -245,11 +255,18 @@ int parseArgument(char *argument, Info *info) {
 
 void getFilename(Info *info) {
     int i, j, k;
+	char *garbage;
     
+	if( (garbage = strchr(info->path, '/')) == NULL ) {
+        	strcpy(info->filename, info->path);
+		return;
+	}
+
     for(i=info->pathLength; i>=0; i--) {
         if(info->path[i] == '/')
             break;
     }
+	i++;
 
     for(k = 0, j = i; j<info->pathLength; j++, k++) {
         info->filename[k] = info->path[j];
@@ -272,18 +289,21 @@ struct hostent *retrieveIP(Info *info) {
 
 int getAnswer(int sockfd, Info *info) {
 
+	memset(info->response, 0, 3);
+
     enum state_machine_1 state = START;
     char c;
 
     int counter = 0;
     int multipleLineCounter = 0;
 
-    read(sockfd, &c, 1);
+	
 
     while(state != DONE) {
 
         read(sockfd, &c, 1);
 
+	printf("%c", c);
         switch(state) {
 
             case(START):
@@ -338,57 +358,78 @@ int getAnswer(int sockfd, Info *info) {
 int sendUsername(int sockfd, Info *info) {
 
     memset(info->response, 0, 3);
-    
+/*    
     char command[5 + info->usernameLength];
     memset(command, 0, 5+info->usernameLength);
     strcpy(command, "user ");
     strcat(command, info->username);
-    strcat(command, "\n");
+    strcat(command, "\n");	
+	
     write(sockfd, command, 5+info->usernameLength);
+	*/
+
+	write(sockfd, "user ", strlen("user "));
+	write(sockfd, info->username, info->usernameLength);
+	write(sockfd, "\n", 1);
 
     while(TRUE) {
         getAnswer(sockfd, info);
 
-        if( info->response[0] == 1) {
+        if( info->response[0] == '1') {
             getAnswer(sockfd, info);
         }
-        else if( info->response[0] == 2) {
+        else if( info->response[0] == '2') {
             return 1;
         }
-        else if( info->response[0] == 4 ) { 
-            write(sockfd, command, 5+info->usernameLength);
+	else if( info->response[0] == '3') {
+	    return 2;
         }
-        else if( info->response[0] == 5 ) {
+        else if( info->response[0] == '4' ) { 
+            //write(sockfd, command, 5+info->usernameLength);
+		write(sockfd, "user ", strlen("user "));
+		write(sockfd, info->username, info->usernameLength);
+		write(sockfd, "\n", 1);
+        }
+        else if( info->response[0] == '5' ) {
             printf("> An error was met trying to login.\n");
             return -1;
         }
+
+	
     }
 }
 
 int sendPassword(int sockfd, Info *info) {
 
     memset(info->response, 0, 3);
-    
+   /* 
     char command[5 + info->passwordLength];
     memset(command, 0, 5+info->passwordLength);
     strcpy(command, "pass ");
     strcat(command, info->password);
     strcat(command, "\n");
     write(sockfd, command, 5+info->passwordLength);
+*/
+	write(sockfd, "pass ", strlen("pass "));
+	write(sockfd, info->password, info->passwordLength);
+	write(sockfd, "\n", 1);
 
     while(TRUE) {
         getAnswer(sockfd, info);
 
-         if( info->response[0] == 1) {
+         if( info->response[0] == '1') {
             getAnswer(sockfd, info);
         }
-        else if( info->response[0] == 2) {
+        else if( info->response[0] == '2') {
             return 1;
         }
-        else if( info->response[0] == 4 ) { 
-            write(sockfd, command, 5+info->passwordLength);
+        else if( info->response[0] == '4' ) { 
+            //write(sockfd, command, 5+info->passwordLength);
+	write(sockfd, "pass ", strlen("pass "));
+	write(sockfd, info->password, info->passwordLength);
+	write(sockfd, "\n", 1);
         }
-        else if( info->response[0] == 5 ) {
+        else if( info->response[0] == '5' ) {
             printf("> An error was met trying to login.\n");
             return -1;
         }
@@ -401,20 +442,21 @@ void getPort(int sockfd, Info *info) {
     char c;
     int counter = 0;
     int nBytes = 0;
-    char byte1[4];
+    unsigned char byte1[4];
     int byte1Size = 0;
 
-    char byte2[4];
+    unsigned char byte2[4];
     int byte2Size = 0;
 
-    memset(byte1, 0, 6);
-    memset(byte2, 0, 6);
+    memset(byte1, 0, 4);
+    memset(byte2, 0, 4);
 
     write(sockfd, "pasv\n", 5);
 
 
 	while(state != DONE2) {
-
+	read(sockfd, &c, 1);
+	printf("%c", c);
         switch(state) {
 
             case(START2):
@@ -440,31 +482,37 @@ void getPort(int sockfd, Info *info) {
 
             case(OBRACKET):
                 if( c == ',' ) {
-                    if( nBytes == 4 )
-                        state=PORT1;
-                    else
-                        nBytes++;
+			nBytes++;
+                    	if( nBytes == 4 )
+                        	state=PORT1;
+			
                 }
+		
 
                 break;
 
             case(PORT1):
                 if( c != ',' ) {
+
                     byte1[byte1Size] = c;
                     byte1Size++;
                 }
-                else 
+                else {
                     state = PORT2;
-
+		}
                 break;
 
             case(PORT2):
                 if( c != ')' ) {
-                    byte2[byte2Size] = c;
-                    byte2Size++;
+			if( c != ',' ) {
+
+                    		byte2[byte2Size] = c;
+                    		byte2Size++;
+			}
                 }
-                else 
+                else {
                     state = DONE2;
+		}
 
                 break;
         }
@@ -475,27 +523,34 @@ void getPort(int sockfd, Info *info) {
 
 int sendRetrieveCommand(int sockfd, int sockfdClient, Info *info) {
     memset(info->response, 0, 3);
-    
+   /* 
     char command[5 + info->pathLength];
     memset(command, 0, 5+info->pathLength);
     strcpy(command, "retr ");
     strcat(command, info->path);
     strcat(command, "\n");
     write(sockfd, command, 5+info->pathLength);
+*/
+	write(sockfd, "retr ", strlen("retr "));
+	write(sockfd, info->path, info->pathLength);
+	write(sockfd, "\n", 1);
 
     while(TRUE) {
         getAnswer(sockfd, info);
 
-        if( info->response[0] == 1) {
+        if( info->response[0] == '1') {
             makeFile(sockfdClient, info);
         }
-        else if( info->response[0] == 2) {
+        else if( info->response[0] == '2') {
             return 1;
         }
-        else if( info->response[0] == 4 ) { 
-            write(sockfd, command, 5+info->passwordLength);
+        else if( info->response[0] == '4' ) { 
+            //write(sockfd, command, 5+info->passwordLength);
+		write(sockfd, "retr ", strlen("retr "));
+		write(sockfd, info->path, info->pathLength);
+		write(sockfd, "\n", 1);
         }
-        else if( info->response[0] == 5 ) {
+        else if( info->response[0] == '5' ) {
             printf("> An error was met trying to login.\n");
             return -1;
         }
@@ -503,14 +558,16 @@ int sendRetrieveCommand(int sockfd, int sockfdClient, Info *info) {
 }
 
 void makeFile(int fd, Info *info) {
-    
-	FILE *file = fopen((char *)info->filename, "wb+");
+	FILE *file = fopen((char *)info->path, "wb+");
 
 	char socketArr[SOCKET_ARR_SIZE];
  	int bytes;
+
+	
  	while( (bytes = read(fd, socketArr, SOCKET_ARR_SIZE)) > 0 ) {
-    	bytes = fwrite(socketArr, bytes, 1, file);
-    }
+
+    		fwrite(socketArr, sizeof(int), bytes, file);
+   	 }
 
   	fclose(file);
 
