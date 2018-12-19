@@ -558,7 +558,7 @@ int sendRetrieveCommand(int sockfd, int sockfdClient, Info *info) {
 }
 
 void makeFile(int fd, Info *info) {
-	FILE *file = fopen((char *)info->path, "wb+");
+	FILE *file = fopen((char *)info->filename, "wb+");
 
 	char socketArr[SOCKET_ARR_SIZE];
  	int bytes;
@@ -566,7 +566,7 @@ void makeFile(int fd, Info *info) {
 	
  	while( (bytes = read(fd, socketArr, SOCKET_ARR_SIZE)) > 0 ) {
 
-    		fwrite(socketArr, sizeof(int), bytes, file);
+    		fwrite(socketArr, sizeof(char), bytes, file);
    	 }
 
   	fclose(file);
